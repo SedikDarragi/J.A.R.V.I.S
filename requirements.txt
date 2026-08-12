@@ -7,3 +7,4 @@ piper-tts
 pycaw
 Pillow
 psutil
+faster-whisper

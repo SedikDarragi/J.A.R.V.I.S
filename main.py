@@ -33,11 +33,12 @@ DEFAULT_CONFIG = {
     "voice": "voices/en_GB-alan-medium.onnx",
     "ollama_url": "http://localhost:11434",
     "language": "en-US",
-    "wake_word_enabled": True,
-    "wake_words": ["jarvis", "hey jarvis", "ok jarvis"],
     "max_history": 20,
     "mic_device": None,
     "city": "",
+    "stt_engine": "auto",
+    "whisper_model": "base",
+    "cue_sound": True,
 }
 
 BANNER = r"""
@@ -48,14 +49,13 @@ BANNER = r"""
 """
 
 HELP = """COMMANDS
-  Hold LEFT CTRL      : push to talk (say anything, no wake word needed)
-  F12                 : toggle wake word listening on/off
+  Hold LEFT CTRL      : push to talk (say anything)
   F11                 : quit Jarvis
   Type in this window : send a typed message instead
   /devices            : list microphone devices
   /mic <id>           : choose a microphone
+  /stt <engine>       : speech engine: auto (recommended), whisper, google
   /model <name>       : change the AI model
-  /wake               : toggle wake word mode
   /help               : show this help
   /quit               : quit Jarvis"""
 
@@ -139,9 +139,12 @@ class JarvisApp:
         print("[boot] loading voice...")
         self.voice = JarvisVoice(voice_path)
         self.speech = SpeechManager(self.voice)
-        self.stt = SpeechToText(self.cfg["language"], self.cfg["mic_device"])
+        self.stt = SpeechToText(self.cfg["language"], self.cfg["mic_device"], self.cfg.get("stt_engine", "auto"), self.cfg.get("whisper_model", "base"))
+        if self.stt.engine != "google":
+            print("[boot] loading local speech recognition...")
+            self.stt.load_whisper_async()
+            threading.Thread(target=self._boot_whisper_watcher, daemon=True).start()
         self.ctrl_held = False
-        self.wake_enabled = self.cfg["wake_word_enabled"]
         self.quit_event = threading.Event()
         self.processing = threading.Lock()
         self._partial_reply = ""
@@ -149,6 +152,24 @@ class JarvisApp:
         print(HELP)
         self._status()
         threading.Thread(target=self._prewarm, daemon=True).start()
+
+    def _boot_whisper_watcher(self) -> None:
+        self.stt._whisper_loading.wait(timeout=180)
+        if self.stt.whisper_ready():
+            print("[boot] local speech recognition ready - offline and more accurate.")
+        else:
+            print("[boot] local speech recognition unavailable - using Google.")
+
+    def _beep(self) -> None:
+        if not self.cfg.get("cue_sound", True):
+            return
+        try:
+            import numpy as np
+            import sounddevice as sd
+            t = np.linspace(0, 0.06, int(44100 * 0.06), endpoint=False)
+            sd.play((0.12 * np.sin(2 * np.pi * 880 * t)).astype(np.float32), 44100)
+        except Exception:
+            pass
 
     def _prewarm(self) -> None:
         try:
@@ -158,16 +179,12 @@ class JarvisApp:
             pass
 
     def _status(self) -> None:
-        mode = "WAKE WORD" if self.wake_enabled else "PUSH-TO-TALK ONLY"
-        print(f"\n  [{mode}]  Say \"Jarvis...\" then your command.  (F12 to toggle, F11 to quit)")
+        print(f"\n  [PUSH-TO-TALK]  Hold LEFT CTRL and talk.  (F11 to quit)")
         print("  " + "-" * 56)
 
     def on_press(self, key) -> None:
         if key == keyboard.Key.ctrl_l:
             self.ctrl_held = True
-        elif key == keyboard.Key.f12:
-            self.wake_enabled = not self.wake_enabled
-            print(f"\n  [system] Wake word mode {'ON' if self.wake_enabled else 'OFF'}")
         elif key == keyboard.Key.f11:
             print("\n  [system] Shutting down. Goodbye, sir.")
             self.quit_event.set()
@@ -242,9 +259,6 @@ class JarvisApp:
             return False
         if cmd == "/help":
             print(HELP)
-        elif cmd == "/wake":
-            self.wake_enabled = not self.wake_enabled
-            print(f"  [system] Wake word mode {'ON' if self.wake_enabled else 'OFF'}")
         elif cmd == "/devices":
             print("  Microphone devices:")
             print(self.stt.list_devices())
@@ -257,6 +271,18 @@ class JarvisApp:
                 print(f"  [system] Mic set to device {dev}")
             except ValueError:
                 print("  [system] Usage: /mic <id>")
+        elif cmd.startswith("/stt"):
+            engine = cmd[4:].strip()
+            if engine in ("auto", "whisper", "google"):
+                self.cfg["stt_engine"] = engine
+                save_config(self.cfg)
+                self.stt.engine = engine
+                if engine != "google" and not self.stt.whisper_ready() and not self.stt._whisper_loading.is_set():
+                    print("  [system] loading local speech recognition...")
+                    self.stt.load_whisper_async()
+                print(f"  [system] speech engine set to {engine}")
+            else:
+                print("  [system] Usage: /stt auto|whisper|google")
         elif cmd.startswith("/model "):
             name = cmd[7:].strip()
             self.cfg["model"] = name
@@ -287,7 +313,7 @@ class JarvisApp:
                 time.sleep(0.1)
                 continue
             if self.ctrl_held:
-                audio = self.stt.record_while(lambda: self.ctrl_held and not self.quit_event.is_set())
+                audio = self.stt.record_while(lambda: self.ctrl_held and not self.quit_event.is_set(), on_start=self._beep)
                 if audio is not None:
                     try:
                         text = self.stt.transcribe(audio)
@@ -295,46 +321,12 @@ class JarvisApp:
                         print(f"  [error] {e}")
                         text = None
                     if text:
+                        print(f"\n  [heard] {text}")
                         self.process(text)
                     else:
-                        print("  [system] Didn't catch that, sir.")
+                        print("  [system] Didn't catch that, sir. Try /mic <id> to check your microphone.")
                 continue
-            if self.wake_enabled:
-                try:
-                    audio = self.stt.record_utterance()
-                except Exception:
-                    if self.quit_event.is_set():
-                        break
-                    time.sleep(0.2)
-                    continue
-                if audio is None:
-                    continue
-                try:
-                    text = self.stt.transcribe(audio)
-                except RuntimeError as e:
-                    print(f"  [error] {e}")
-                    continue
-                if not text:
-                    continue
-                lower = text.lower().strip()
-                words = lower.split()
-                if not words:
-                    continue
-                first = words[0].strip(".,!? ")
-                if first not in self.cfg["wake_words"] and lower not in self.cfg["wake_words"]:
-                    continue
-                command = lower
-                for w in self.cfg["wake_words"]:
-                    if lower.startswith(w):
-                        command = lower[len(w):].strip(" ,.!?")
-                        break
-                if not command:
-                    self.speak("Yes, sir?", sync=True)
-                    continue
-                print(f"\n  YOU    > {text}")
-                self.process(text)
-            else:
-                time.sleep(0.1)
+            time.sleep(0.1)
 
     def run(self) -> None:
         listener = keyboard.Listener(on_press=self.on_press, on_release=self.on_release)

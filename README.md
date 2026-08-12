@@ -6,7 +6,7 @@ A voice-controlled personal assistant for Windows, inspired by Tony Stark's JARV
 
 - **Voice conversations** — speech recognition + offline neural text-to-speech (Piper, British "Alan" voice)
 - **JARVIS personality** — powered by a local LLM via Ollama (no cloud, no API keys)
-- **Wake word mode** — say *"Jarvis, ..."* to get its attention; or hold **Left Ctrl** to push-to-talk
+- **Push-to-talk** — hold **Left Ctrl** and talk; no wake word needed
 - **Real PC actions**:
   - Play random / genre music on Spotify, pause, skip tracks
   - Open apps, websites, Google search, YouTube
@@ -14,7 +14,7 @@ A voice-controlled personal assistant for Windows, inspired by Tony Stark's JARV
   - Live weather (free Open-Meteo API, no key)
   - Knows the current time, date and battery level
 - **Streaming speech** — Jarvis starts answering while the model is still thinking
-- Fully local brain and voice — only speech recognition (Google's free API) and weather need internet
+- Fully local brain, voice and speech recognition (Whisper) — only the weather needs internet. Google's free API is used as an automatic fallback for speech recognition.
 
 ## Requirements
 
@@ -40,9 +40,7 @@ If you prefer installing Ollama system-wide, download it from [ollama.com](https
 
 | Action | Effect |
 | --- | --- |
-| Say *"Jarvis, play me some music"* | Random music on Spotify |
-| Hold **Left Ctrl** | Push-to-talk (no wake word needed) |
-| **F12** | Toggle wake word listening on/off |
+| Hold **Left Ctrl** | Push-to-talk (say anything while held) |
 | **F11** | Quit |
 | Type in the window | Send a typed message |
 | `/help` | Show all commands |
@@ -56,14 +54,17 @@ Edit `config.json` (created from `config.example.json`):
 - `model` — Ollama model name (try `qwen2.5:7b` for a smarter brain, `llama3.2:1b` for speed)
 - `city` — your city, so "what's the weather like?" works without naming one
 - `mic_device` — microphone device index (use `/devices` in the app to list them)
-- `wake_words`, `wake_word_enabled`, `language`, `max_history` — assorted behavior
+- `stt_engine` — `auto` (local Whisper, recommended), `whisper`, or `google`; switch anytime with `/stt`
+- `whisper_model` — Whisper model size (`tiny`, `base`, `small`; bigger = more accurate, slower)
+- `cue_sound` — play a soft beep when recording starts
+- `language`, `max_history` — assorted behavior
 
 ## Project structure
 
 ```
 actions.py          Real PC actions (Spotify, apps, web, system, weather)
 brain.py            Ollama client: JARVIS persona, streaming JSON action protocol
-stt.py              Microphone capture with voice activity detection + transcription
+stt.py              Microphone capture with VAD (pre-roll, noise-adaptive) + Whisper/Google transcription
 tts.py              Offline Piper TTS (British voice)
 main.py             App: hotkeys, wake word / push-to-talk loops, speech queue
 setup.ps1           One-time installer (deps, voice, Ollama, model)
@@ -71,6 +72,6 @@ setup.ps1           One-time installer (deps, voice, Ollama, model)
 
 ## Notes
 
-- Speech recognition uses Google's free Web Speech API — it requires internet. Everything else works offline.
-- The voice model and Ollama binary (~2 GB total) are downloaded by `setup.ps1` and excluded from git.
+- Speech recognition uses the local Whisper model (downloaded on first run, ~150 MB) with Google's free API as automatic fallback. Everything except the weather works offline.
+- The voice model, Whisper model and Ollama binary (~2 GB total) are downloaded by `setup.ps1` and excluded from git.
 - Some actions (Spotify, weather) open external services in your default browser/apps.
