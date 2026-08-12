@@ -1,0 +1,9 @@
+requests
+sounddevice
+numpy
+SpeechRecognition
+pynput
+piper-tts
+pycaw
+Pillow
+psutil

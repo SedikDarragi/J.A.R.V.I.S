@@ -1,0 +1,213 @@
+import json
+import re
+from datetime import datetime
+from typing import Iterator
+
+import requests
+
+SYSTEM_PROMPT = """You are J.A.R.V.I.S. (Just A Rather Very Intelligent System), the personal AI assistant of Tony Stark, now serving the user as their home assistant. You are witty, charming, polite, fiercely loyal and always address the user as "sir" (or "madam" if told otherwise). You have a dry British sense of humour. Keep your replies short, natural and suited to being spoken aloud - no lists, no markdown, no symbols, no emojis. You control the user's Windows 11 computer, so whenever the user asks you to DO something on the computer you MUST use an action.
+
+Today is {today}. The current time is {time}.{battery}{city}
+
+AVAILABLE ACTIONS (respond with exactly one):
+- play_music: args {{"mode": "random"}} or {{"mode": "random", "genre": "rock|pop|hiphop|rap|chill|lofi|workout|edm|party"}} - plays random music on Spotify
+- pause_music / resume_music / next_track / previous_track: no args - media controls
+- open_app: args {{"name": "notepad|calculator|browser|file explorer|command prompt|powershell|settings|task manager|paint|spotify|discord|steam|whatsapp|camera|word|excel|powerpoint|<any app name>"}}
+- open_website: args {{"url": "example.com"}} - opens a website in the browser
+- web_search: args {{"query": "..."}} - searches Google
+- play_youtube: args {{"query": "..."}} - opens YouTube search results for that query
+- set_volume: args {{"level": 0-100}}
+- mute / unmute: no args
+- lock_pc: no args - locks the computer
+- take_screenshot: no args
+- set_timer: args {{"minutes": N}}
+- weather: args {{"city": "Paris"}} or {{}} to use the user's city - you have NO built-in knowledge of current weather, temperature or forecasts, so you MUST call this action for ANY weather-related question
+
+RESPOND ONLY WITH A SINGLE VALID JSON OBJECT, no other text:
+{{"reply": "your spoken response", "action": {{"name": "...", "args": {{...}}}}}}
+- Include "action" ONLY when the user asks for a computer task or about the weather. For pure conversation - jokes, explanations, opinions, small talk - respond with text only and NO action.
+- "reply" must be something you would say out loud.
+- When you include an action, your "reply" must be a brief confident acknowledgment (for example "Certainly, sir." or "Checking that for you, sir.") - never refuse, apologize or claim you lack abilities.
+- You DO know the current time, date and battery status from the context above - answer those directly with text, never with an action.
+- The weather is the ONLY real-time data you lack: for ANY weather question you MUST use the weather action and your reply must be a confident acknowledgment like "Checking the Paris forecast, sir." You must NEVER say you lack weather information - you always have it via the action.
+- Never invent action names - only use the actions listed above. Use each action's documented args exactly.
+
+EXAMPLES:
+user: "Jarvis play me some music" -> {{"reply": "Right away, sir.", "action": {{"name": "play_music", "args": {{"mode": "random"}}}}}}
+user: "what's the weather in Paris" -> {{"reply": "Checking the Paris forecast, sir.", "action": {{"name": "weather", "args": {{"city": "Paris"}}}}}}
+user: "tell me a joke" -> {{"reply": "Why did the scarecrow win an award? Because he was outstanding in his field!"}}
+user: "set a 10 minute timer" -> {{"reply": "Setting a ten minute timer, sir.", "action": {{"name": "set_timer", "args": {{"minutes": 10}}}}}}
+user: "hello" -> {{"reply": "Good evening, sir. How may I assist you today?"}}"""
+
+_SENT_END = re.compile(r"(?<=[.!?])\s+")
+
+
+class ReplyExtractor:
+    def __init__(self):
+        self.buf = ""
+        self._idx = 0
+        self._in_value = False
+        self._escaped = False
+
+    def feed(self, chunk: str) -> str | None:
+        self.buf += chunk
+        delta = []
+        while True:
+            if not self._in_value:
+                i = self.buf.find('"reply"', self._idx)
+                if i == -1:
+                    break
+                j = i + 7
+                while j < len(self.buf) and self.buf[j] in " \t\r\n":
+                    j += 1
+                if j >= len(self.buf) or self.buf[j] != ":":
+                    self._idx = i + 1
+                    continue
+                j += 1
+                while j < len(self.buf) and self.buf[j] in " \t\r\n":
+                    j += 1
+                if j >= len(self.buf):
+                    break
+                if self.buf[j] != '"':
+                    self._idx = len(self.buf)
+                    break
+                self._idx = j + 1
+                self._in_value = True
+            k = self._idx
+            while k < len(self.buf):
+                c = self.buf[k]
+                if self._escaped:
+                    delta.append(c)
+                    self._escaped = False
+                elif c == "\\":
+                    self._escaped = True
+                elif c == '"':
+                    break
+                else:
+                    delta.append(c)
+                k += 1
+            if k < len(self.buf):
+                self._idx = k + 1
+                self._in_value = False
+            else:
+                self._idx = k
+            if delta:
+                return "".join(delta)
+            break
+        return None
+
+
+class JarvisBrain:
+    def __init__(self, ollama_url: str = "http://localhost:11434", model: str = "llama3.2:3b", max_history: int = 20, city: str = ""):
+        self.url = ollama_url.rstrip("/")
+        self.model = model
+        self.max_history = max_history
+        self.city = city
+        self.history = []
+
+    def _context(self) -> dict:
+        now = datetime.now()
+        today = now.strftime("%A, %d %B %Y")
+        time_str = now.strftime("%I:%M %p")
+        battery = ""
+        try:
+            import psutil
+            bat = psutil.sensors_battery()
+            if bat is not None:
+                plugged = "plugged in" if bat.power_plugged else "on battery"
+                battery = f" The user's PC battery is at {int(bat.percent)}% and is {plugged}."
+        except Exception:
+            pass
+        city = ""
+        if self.city:
+            city = f" You live with the user in {self.city}."
+        return {"today": today, "time": time_str, "battery": battery, "city": city}
+
+    def _messages(self, user_text: str) -> list:
+        ctx = self._context()
+        messages = [{"role": "system", "content": SYSTEM_PROMPT.format(**ctx)}]
+        messages.extend(self.history)
+        messages.append({"role": "user", "content": user_text})
+        return messages
+
+    def ask_stream(self, user_text: str) -> Iterator[dict]:
+        payload = {
+            "model": self.model,
+            "messages": self._messages(user_text),
+            "stream": True,
+            "format": "json",
+            "options": {"temperature": 0.7, "num_ctx": 8192, "num_predict": 200},
+        }
+        extractor = ReplyExtractor()
+        raw = ""
+        streamed_reply = ""
+        with requests.post(f"{self.url}/api/chat", json=payload, stream=True, timeout=300) as r:
+            r.raise_for_status()
+            for line in r.iter_lines(decode_unicode=True):
+                if not line:
+                    continue
+                data = json.loads(line)
+                if data.get("done"):
+                    break
+                content = data.get("message", {}).get("content")
+                if content:
+                    raw += content
+                    seg = extractor.feed(content)
+                    if seg:
+                        streamed_reply += seg
+                        yield {"type": "text", "text": seg}
+        parsed = self._parse_json(raw)
+        reply = streamed_reply or parsed.get("reply", "")
+        action = parsed.get("action")
+        if isinstance(action, dict):
+            name = action.get("name") or action.get("type")
+            if name:
+                action = {"name": name, "args": action.get("args") or {}}
+            else:
+                action = None
+        else:
+            action = None
+        yield {"type": "done", "reply": reply, "action": action}
+
+    def commit_turn(self, user_text: str, reply: str, calls: list, results: list) -> None:
+        self.history.append({"role": "user", "content": user_text})
+        assistant = {"role": "assistant", "content": reply}
+        if calls:
+            assistant["tool_calls"] = [
+                {"function": {"name": c["name"], "arguments": c["args"]}} for c in calls
+            ]
+        self.history.append(assistant)
+        for res in results:
+            self.history.append({"role": "tool", "content": res})
+        if len(self.history) > self.max_history * 2:
+            self.history = self.history[-self.max_history * 2:]
+
+    @staticmethod
+    def split_sentences(text: str) -> list:
+        return [s.strip() for s in _SENT_END.split(text) if s.strip()]
+
+    @staticmethod
+    def _parse_json(content: str) -> dict:
+        content = re.sub(r"```(?:json)?", "", content).strip()
+        start, end = content.find("{"), content.rfind("}")
+        if start != -1 and end > start:
+            try:
+                return json.loads(content[start:end + 1])
+            except json.JSONDecodeError:
+                pass
+        return {"reply": content, "action": None}
+
+    def ping(self) -> bool:
+        try:
+            requests.get(f"{self.url}/api/tags", timeout=5)
+            return True
+        except Exception:
+            return False
+
+    def ensure_model(self) -> str:
+        tags = requests.get(f"{self.url}/api/tags", timeout=10).json()
+        installed = {m["name"] for m in tags.get("models", [])}
+        if self.model in installed:
+            return "already installed"
+        requests.post(f"{self.url}/api/pull", json={"name": self.model}, stream=False, timeout=3600)
+        return "installed"

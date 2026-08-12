@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# Large runtime binaries (downloaded by setup.ps1)
+ollama/
+voices/
+
+# Local user configuration (use config.example.json as a template)
+config.json
+
+# OS
+Thumbs.db
+Desktop.ini

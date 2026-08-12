@@ -1,0 +1,11 @@
+{
+  "model": "llama3.2:3b",
+  "voice": "voices/en_GB-alan-medium.onnx",
+  "ollama_url": "http://localhost:11434",
+  "language": "en-US",
+  "wake_word_enabled": true,
+  "wake_words": ["jarvis", "hey jarvis", "ok jarvis"],
+  "max_history": 20,
+  "mic_device": null,
+  "city": ""
+}
