@@ -56,7 +56,6 @@ Edit `config.json` (created from `config.example.json`):
 - `mic_device` — microphone device index (use `/devices` in the app to list them)
 - `stt_engine` — `auto` (local Whisper, recommended), `whisper`, or `google`; switch anytime with `/stt`
 - `whisper_model` — Whisper model size (`tiny`, `base`, `small`; bigger = more accurate, slower)
-- `cue_sound` — play a soft beep when recording starts
 - `language`, `max_history` — assorted behavior
 
 ## Project structure

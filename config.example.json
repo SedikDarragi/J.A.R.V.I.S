@@ -6,7 +6,7 @@
   "max_history": 20,
   "mic_device": null,
   "city": "",
+  "liked_playlist": "",
   "stt_engine": "auto",
-  "whisper_model": "base",
-  "cue_sound": true
+  "whisper_model": "base"
 }

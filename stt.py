@@ -69,7 +69,7 @@ class SpeechToText:
     def _audio_to_pcm(self, audio):
         return (np.clip(audio, -1.0, 1.0) * 32767).astype(np.int16)
 
-    def record_while(self, should_record, on_start=None):
+    def record_while(self, should_record):
         preroll = deque(maxlen=PREROLL_BLOCKS)
         recording = None
         started_at = None
@@ -78,8 +78,6 @@ class SpeechToText:
                 if recording is None:
                     recording = list(preroll)
                     started_at = time.time()
-                    if on_start:
-                        on_start()
                 recording.append(block)
                 if time.time() - started_at > MAX_SPEECH_SECONDS:
                     break

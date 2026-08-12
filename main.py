@@ -36,9 +36,9 @@ DEFAULT_CONFIG = {
     "max_history": 20,
     "mic_device": None,
     "city": "",
+    "liked_playlist": "",
     "stt_engine": "auto",
     "whisper_model": "base",
-    "cue_sound": True,
 }
 
 BANNER = r"""
@@ -108,6 +108,8 @@ class SpeechManager:
             self.speaking = True
             try:
                 self.voice.speak(item)
+            except Exception as e:
+                print(f"  [error] speech failed: {e}")
             finally:
                 self.speaking = False
                 self.queue.task_done()
@@ -130,6 +132,7 @@ class JarvisApp:
         ensure_ollama(self.cfg)
         self.brain = JarvisBrain(self.cfg["ollama_url"], self.cfg["model"], self.cfg["max_history"], self.cfg.get("city", ""))
         actions.CITY = self.cfg.get("city", "")
+        actions.LIKED_PLAYLIST_ID = str(self.cfg.get("liked_playlist", "")).strip()
         if not self.brain.ping():
             print("[boot] ERROR: cannot reach Ollama API at", self.cfg["ollama_url"])
             sys.exit(1)
@@ -159,17 +162,6 @@ class JarvisApp:
             print("[boot] local speech recognition ready - offline and more accurate.")
         else:
             print("[boot] local speech recognition unavailable - using Google.")
-
-    def _beep(self) -> None:
-        if not self.cfg.get("cue_sound", True):
-            return
-        try:
-            import numpy as np
-            import sounddevice as sd
-            t = np.linspace(0, 0.06, int(44100 * 0.06), endpoint=False)
-            sd.play((0.12 * np.sin(2 * np.pi * 880 * t)).astype(np.float32), 44100)
-        except Exception:
-            pass
 
     def _prewarm(self) -> None:
         try:
@@ -313,7 +305,7 @@ class JarvisApp:
                 time.sleep(0.1)
                 continue
             if self.ctrl_held:
-                audio = self.stt.record_while(lambda: self.ctrl_held and not self.quit_event.is_set(), on_start=self._beep)
+                audio = self.stt.record_while(lambda: self.ctrl_held and not self.quit_event.is_set())
                 if audio is not None:
                     try:
                         text = self.stt.transcribe(audio)

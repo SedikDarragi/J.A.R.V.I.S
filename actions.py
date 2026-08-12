@@ -10,7 +10,10 @@ from urllib.parse import quote
 
 import requests
 
+import media
+
 CITY = ""
+LIKED_PLAYLIST_ID = ""
 
 WMO_CODES = {
     0: "clear skies",
@@ -94,17 +97,35 @@ def _shell(cmd: str) -> None:
 
 
 def play_music(args: dict) -> str:
-    genre = str(args.get("genre", "random")).lower()
-    ids = PLAYLISTS.get(genre) or PLAYLISTS["random"]
-    pid = random.choice(ids)
-    _shell(f"spotify:playlist:{pid}")
-    time.sleep(2.5)
+    mode = str(args.get("mode", "liked")).lower()
+    genre = str(args.get("genre", "")).lower()
+
+    if mode == "liked":
+        if not LIKED_PLAYLIST_ID:
+            return "I don't have your playlist set up yet, sir. Point me to it and I'll play it for you."
+        uri = f"spotify:playlist:{LIKED_PLAYLIST_ID}"
+        label = "your playlist"
+    elif mode == "random":
+        ids = PLAYLISTS["random"]
+        pid = random.choice(ids)
+        uri = f"spotify:playlist:{pid}"
+        label = "some random tunes"
+    else:
+        ids = PLAYLISTS.get(genre) or PLAYLISTS["random"]
+        pid = random.choice(ids)
+        uri = f"spotify:playlist:{pid}"
+        label = f"some {genre} music"
+
+    _shell(uri)
+    time.sleep(3.0)
     running = any(p.lower().endswith("spotify.exe") for p in _process_names())
     if not running:
-        webbrowser.open(f"https://open.spotify.com/playlist/{pid}")
-    if genre == "random":
-        return "Right away, sir. Some random tunes coming up on Spotify."
-    return f"Right away, sir. Firing up some {genre} music on Spotify."
+        webbrowser.open(uri.replace("spotify:", "https://open.spotify.com/"))
+    if not media.playing():
+        media.play()
+    if mode == "liked":
+        return f"Right away, sir. Playing from {label} on Spotify."
+    return f"Right away, sir. {label.capitalize()} coming up on Spotify."
 
 
 def _process_names():
@@ -120,22 +141,34 @@ def _media_key(code: int) -> None:
 
 
 def pause_music(args: dict) -> str:
-    _media_key(VK_MEDIA_PLAY_PAUSE)
+    if media.session_alive():
+        media.pause()
+    else:
+        _media_key(VK_MEDIA_PLAY_PAUSE)
     return "Music paused, sir."
 
 
 def resume_music(args: dict) -> str:
-    _media_key(VK_MEDIA_PLAY_PAUSE)
+    if media.session_alive():
+        media.play()
+    else:
+        _media_key(VK_MEDIA_PLAY_PAUSE)
     return "Music resumed, sir."
 
 
 def next_track(args: dict) -> str:
-    _media_key(VK_MEDIA_NEXT_TRACK)
+    if media.session_alive():
+        media.next_track()
+    else:
+        _media_key(VK_MEDIA_NEXT_TRACK)
     return "Skipping to the next track, sir."
 
 
 def previous_track(args: dict) -> str:
-    _media_key(VK_MEDIA_PREV_TRACK)
+    if media.session_alive():
+        media.previous_track()
+    else:
+        _media_key(VK_MEDIA_PREV_TRACK)
     return "Going back to the previous track, sir."
 
 
