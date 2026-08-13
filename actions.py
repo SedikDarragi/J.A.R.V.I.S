@@ -102,9 +102,12 @@ def play_music(args: dict) -> str:
 
     if mode == "liked":
         if not LIKED_PLAYLIST_ID:
-            return "I don't have your playlist set up yet, sir. Point me to it and I'll play it for you."
-        uri = f"spotify:playlist:{LIKED_PLAYLIST_ID}"
-        label = "your playlist"
+            pid = random.choice(PLAYLISTS["random"])
+            uri = f"spotify:playlist:{pid}"
+            label = "some tunes"
+        else:
+            uri = f"spotify:playlist:{LIKED_PLAYLIST_ID}"
+            label = "your playlist"
     elif mode == "random":
         ids = PLAYLISTS["random"]
         pid = random.choice(ids)
