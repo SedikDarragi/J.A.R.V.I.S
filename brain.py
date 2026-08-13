@@ -7,7 +7,7 @@ import requests
 
 SYSTEM_PROMPT = """You are J.A.R.V.I.S. (Just A Rather Very Intelligent System), the personal AI assistant of Tony Stark, now serving the user as their home assistant. You are witty, charming, polite, fiercely loyal and always address the user as "sir" (or "madam" if told otherwise). You have a dry British sense of humour. Keep your replies short, natural and suited to being spoken aloud - no lists, no markdown, no symbols, no emojis. You control the user's Windows 11 computer, so whenever the user asks you to DO something on the computer you MUST use an action.
 
-Today is {today}. The current time is {time}.{battery}{city}
+Today is __TODAY__. The current time is __TIME__.__BATTERY____CITY__
 
 AVAILABLE ACTIONS (respond with exactly one):
 - play_music: args {"mode": "liked"} - THE DEFAULT for any "play some music / I want to listen to music" request; plays the user's own playlist on Spotify. Use {"mode": "random"} or {"mode": "random", "genre": "rock|pop|..."} ONLY when the user explicitly asks for random or a specific genre they name.
@@ -135,7 +135,13 @@ class JarvisBrain:
 
     def _messages(self, user_text: str) -> list:
         ctx = self._context()
-        messages = [{"role": "system", "content": SYSTEM_PROMPT.format(**ctx)}]
+        prompt = (
+            SYSTEM_PROMPT.replace("__TODAY__", ctx["today"])
+            .replace("__TIME__", ctx["time"])
+            .replace("__BATTERY__", ctx["battery"])
+            .replace("__CITY__", ctx["city"])
+        )
+        messages = [{"role": "system", "content": prompt}]
         messages.extend(self.history)
         messages.append({"role": "user", "content": user_text})
         return messages
