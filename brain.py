@@ -20,7 +20,7 @@ AVAILABLE ACTIONS (respond with exactly one):
 - web_search: args {{"query": "..."}} - searches Google
 - play_youtube: args {{"query": "..."}} - opens YouTube search results for that query
 - set_volume: args {{"level": 0-100}}
-- mute / unmute: no args
+- mute / unmute: no args - mutes or unmutes the computer's sound. Use mute for "mute", "deafen", "silence", "kill the sound", "quiet the computer".
 - lock_pc: no args - locks the computer
 - take_screenshot: no args
 - set_timer: args {{"minutes": N}}
