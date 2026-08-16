@@ -96,6 +96,25 @@ def _shell(cmd: str) -> None:
     subprocess.Popen(f'cmd /c start "" {cmd}', shell=True)
 
 
+def _zen_exe() -> str | None:
+    for p in (
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Zen Browser", "zen.exe"),
+        r"C:\Program Files\Zen Browser\zen.exe",
+        r"C:\Program Files (x86)\Zen Browser\zen.exe",
+    ):
+        if os.path.exists(p):
+            return p
+    return None
+
+
+def _open_url(url: str) -> None:
+    exe = _zen_exe()
+    if exe:
+        subprocess.Popen([exe, url])
+    else:
+        webbrowser.open(url)
+
+
 def play_music(args: dict) -> str:
     mode = str(args.get("mode", "liked")).lower()
     genre = str(args.get("genre", "")).lower()
@@ -183,9 +202,7 @@ def open_app(args: dict) -> str:
     if target is None:
         target = name
     if target.startswith("http"):
-        webbrowser.open(target)
-    elif target.startswith("start "):
-        _shell(target)
+        _open_url(target)
     else:
         _shell(target)
     return f"Opening {name} for you, sir."
@@ -197,7 +214,7 @@ def open_website(args: dict) -> str:
         return "I need a website address, sir."
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
-    webbrowser.open(url)
+    _open_url(url)
     return f"Opening {url}, sir."
 
 
@@ -205,7 +222,7 @@ def web_search(args: dict) -> str:
     query = str(args.get("query", "")).strip()
     if not query:
         return "What would you like me to search for, sir?"
-    webbrowser.open(f"https://www.google.com/search?q={quote(query)}")
+    _open_url(f"https://www.google.com/search?q={quote(query)}")
     return f"Searching the web for {query}, sir."
 
 
@@ -213,7 +230,7 @@ def play_youtube(args: dict) -> str:
     query = str(args.get("query", "")).strip()
     if not query:
         return "What video would you like me to find, sir?"
-    webbrowser.open(f"https://www.youtube.com/results?search_query={quote(query)}")
+    _open_url(f"https://www.youtube.com/results?search_query={quote(query)}")
     return f"Finding {query} on YouTube for you, sir."
 
 
