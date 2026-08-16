@@ -217,6 +217,7 @@ class JarvisApp:
         with self.processing:
             reply = ""
             action = None
+            t0 = time.time()
             try:
                 for event in self.brain.ask_stream(text):
                     if event["type"] == "text":
@@ -224,6 +225,7 @@ class JarvisApp:
                     elif event["type"] == "done":
                         reply = event["reply"]
                         action = event["action"]
+                print(f"  [timing] brain={time.time() - t0:.1f}s")
             except Exception as e:
                 self._flush_reply()
                 self.speech.say_sync("I'm afraid my systems are struggling right now, sir.")
@@ -307,11 +309,13 @@ class JarvisApp:
             if self.ctrl_held:
                 audio = self.stt.record_while(lambda: self.ctrl_held and not self.quit_event.is_set())
                 if audio is not None:
+                    t0 = time.time()
                     try:
                         text = self.stt.transcribe(audio)
                     except RuntimeError as e:
                         print(f"  [error] {e}")
                         text = None
+                    print(f"  [timing] stt={time.time() - t0:.1f}s")
                     if text:
                         print(f"\n  [heard] {text}")
                         self.process(text)
