@@ -154,7 +154,7 @@ class JarvisBrain:
             "messages": self._messages(user_text),
             "stream": True,
             "format": "json",
-            "options": {"temperature": 0.7, "num_ctx": 8192, "num_predict": 200},
+            "options": {"temperature": 0.6, "num_ctx": 8192, "num_predict": 400},
         }
         extractor = ReplyExtractor()
         raw = ""

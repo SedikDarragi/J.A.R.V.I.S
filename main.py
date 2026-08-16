@@ -208,6 +208,17 @@ class JarvisApp:
             self.speech.say(self._partial_reply.strip())
         self._partial_reply = ""
 
+    def _ask(self, text: str):
+        reply = ""
+        action = None
+        for event in self.brain.ask_stream(text):
+            if event["type"] == "text":
+                self._feed_reply(event["text"])
+            elif event["type"] == "done":
+                reply = event["reply"]
+                action = event["action"]
+        return reply, action
+
     def process(self, text: str) -> None:
         text = text.strip()
         if not text:
@@ -215,16 +226,12 @@ class JarvisApp:
         if not text.startswith("/"):
             print(f"\n  YOU    > {text}")
         with self.processing:
-            reply = ""
-            action = None
             t0 = time.time()
             try:
-                for event in self.brain.ask_stream(text):
-                    if event["type"] == "text":
-                        self._feed_reply(event["text"])
-                    elif event["type"] == "done":
-                        reply = event["reply"]
-                        action = event["action"]
+                reply, action = self._ask(text)
+                if not reply.strip():
+                    self._flush_reply()
+                    reply, action = self._ask(text)
                 print(f"  [timing] brain={time.time() - t0:.1f}s")
             except Exception as e:
                 self._flush_reply()
@@ -232,6 +239,8 @@ class JarvisApp:
                 print(f"  [error] {e}")
                 return
             self._flush_reply()
+            if not reply.strip():
+                reply = "I'm afraid that thought got lost in transmission, sir."
             calls = []
             results = []
             if action:
