@@ -1,5 +1,19 @@
-TEST OK - events returned:
-[{'type': 'text', 'text': 'Good'}, {'type': 'text', 'text': ' evening'}, {'type': 'text', 'text': ','}, {'type': 'text', 'text': ' sir'}, {'type': 'text', 'text': '.'}, {'type': 'done', 'reply': 'Good evening, sir.', 'action': None}]
+=== patching actions.py ===
+  PATCHED: def _open_url(url: str) -> None:
+  PATCHED:     "vs code": "code",
+  PATCHED:     if target.startswith("http"):         _open_url(target) 
+=== patching brain.py ===
+  backup saved: brain.py.backup
+  PATCHED: file explorer|command prompt|powershell|settings|task manage
+  PATCHED: user: "hello" -> {"reply": "Good evening, sir. How may I ass
+=== verification ===
+py_compile actions.py: OK
+py_compile brain.py: OK
+py_compile main.py: OK
+stdout: actions import OK
+vscode exe: C:\Users\Admin\AppData\Local\Programs\Microsoft VS Code\Code.exe
+open_app says: Opening visual studio code for you, sir.
+prompt has vscode names: True
+prompt has examples: True
 
-PROMPT SNIPPET (raw, as Python sees it):
-'____CITY__\n\nAVAILABLE ACTIONS (respond with exactly one):\n- play_music: args {"mode": "liked"} - THE DEFAULT for any "play some music / I want to listen to music" request; plays the user\'s own playlist on Spotify. Use {"mode": "random"} or {"mode": "random", "genre": "rock|pop|..."} ONLY when the user explicitly asks for random or a specific genre they name.\n- resume_music: no args - resumes/plays whatever is currently on Spotify. Use for "play", "resume", "unpause", "continu'
+stderr: 

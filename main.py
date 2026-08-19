@@ -208,10 +208,10 @@ class JarvisApp:
             self.speech.say(self._partial_reply.strip())
         self._partial_reply = ""
 
-    def _ask(self, text: str):
+    def _ask(self, text: str, temperature: float = 0.6):
         reply = ""
         action = None
-        for event in self.brain.ask_stream(text):
+        for event in self.brain.ask_stream(text, temperature=temperature):
             if event["type"] == "text":
                 self._feed_reply(event["text"])
             elif event["type"] == "done":
@@ -228,10 +228,14 @@ class JarvisApp:
         with self.processing:
             t0 = time.time()
             try:
-                reply, action = self._ask(text)
-                if not reply.strip():
+                reply, action = "", None
+                for attempt in range(3):
+                    reply, action = self._ask(text, temperature=0.6 + 0.2 * attempt)
+                    if reply.strip():
+                        break
                     self._flush_reply()
-                    reply, action = self._ask(text)
+                    if attempt < 2:
+                        time.sleep(0.4)
                 print(f"  [timing] brain={time.time() - t0:.1f}s")
             except Exception as e:
                 self._flush_reply()
@@ -243,15 +247,39 @@ class JarvisApp:
                 reply = "I'm afraid that thought got lost in transmission, sir."
             calls = []
             results = []
+            spoken = []
+            ack = ""
             if action:
                 calls.append({"name": action["name"], "args": action.get("args") or {}})
-                results.append(actions.run_action(action["name"], action.get("args") or {}))
+                res_text = actions.run_action(action["name"], action.get("args") or {})
+                results.append(res_text)
+                spoken.append(res_text)
+                if action["name"] == "web_search" and actions.WEB_RESULTS:
+                    results[-1] = (
+                        f"Web search results for \"{actions.WEB_QUERY}\":\n"
+                        + "\n".join(actions.WEB_RESULTS[:5])
+                    )
+                    research = (
+                        f"The user asked: \"{text}\". A web search for \"{actions.WEB_QUERY}\" returned these results:\n"
+                        + "\n".join(actions.WEB_RESULTS[:5])
+                        + "\n\nAnswer the user's original question naturally, in spoken style, addressing them as sir. "
+                          "Base your answer ONLY on these results. If they don't contain the answer, say so briefly. "
+                          "If they asked for your opinion, give a genuine opinion based on the results above."
+                    )
+                    researched, _ = self._ask(research)
+                    if researched.strip():
+                        ack = reply
+                        reply = researched
             self.brain.commit_turn(text, reply, calls, results)
+            if ack and ack.strip() and reply != ack:
+                print(f"\n  JARVIS > {ack.strip()}")
             if reply.strip():
                 print(f"\n  JARVIS > {reply.strip()}")
-            if results:
+            if spoken:
                 self.speech.flush()
-                for res in results:
+                for res in spoken:
+                    if not res:
+                        continue
                     print(f"\n  JARVIS > {res}")
                     self.speech.say_sync(res)
 

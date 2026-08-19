@@ -15,7 +15,7 @@ AVAILABLE ACTIONS (respond with exactly one):
 - pause_music: no args - pauses Spotify. Use for "pause", "stop the music", "quiet".
 - next_track: no args - skips to the next song. Use for "skip", "skip this song", "next song".
 - previous_track: no args - goes back to the previous song. Use for "go back", "previous song", "last song".
-- open_app: args {"name": "notepad|calculator|browser|file explorer|command prompt|powershell|settings|task manager|paint|spotify|discord|steam|whatsapp|camera|word|excel|powerpoint|visual studio code|vs code|vscode|code|<any app name>"} - opens a program
+- open_app: args {"name": "notepad|calculator|browser|file explorer|command prompt|powershell|settings|task manager|paint|spotify|discord|steam|whatsapp|camera|word|excel|powerpoint|<any app name>"} - opens a program
 - open_website: args {"url": "example.com"} - opens a website in the browser
 - web_search: args {"query": "...", "background": false} - searches Google in the browser. Use for ANY request to "search", "look up", "google", "find out", "check" something on the internet - including phrases like "search on Google" or "look that up". Even when the user ALSO asks for your opinion or more information, you MUST still call web_search. Set "background": true ONLY when the user says "in the background", "don't open the browser" or "just tell me" - then no browser opens and you simply answer from the results by voice.
 - convert_currency: args {"amount": 1, "from": "USD", "to": "TND"} - converts money between currencies with live rates. Use for ANY question about currency conversion, exchange rates, "how much is X in Y", "convert dollars to dinars", or converting a price from one currency to another. You NEVER know live rates - always call this action. "amount" is optional (1 if unknown).
@@ -58,9 +58,6 @@ user: "how much is bitcoin in usd" -> {"reply": "Checking that for you, sir.", "
 user: "what's the weather in Paris" -> {"reply": "Checking the Paris forecast, sir.", "action": {"name": "weather", "args": {"city": "Paris"}}}
 user: "tell me a joke" -> {"reply": "Why did the scarecrow win an award? Because he was outstanding in his field!"}
 user: "set a 10 minute timer" -> {"reply": "Setting a ten minute timer, sir.", "action": {"name": "set_timer", "args": {"minutes": 10}}}
-user: "jarvis open code" -> {"reply": "Opening Visual Studio Code, sir.", "action": {"name": "open_app", "args": {"name": "visual studio code"}}}
-user: "jarvis i want to code" -> {"reply": "Opening Visual Studio Code, sir.", "action": {"name": "open_app", "args": {"name": "visual studio code"}}}
-user: "jarvis open vs code" -> {"reply": "Opening Visual Studio Code, sir.", "action": {"name": "open_app", "args": {"name": "visual studio code"}}}
 user: "hello" -> {"reply": "Good evening, sir. How may I assist you today?"}"""
 
 _SENT_END = re.compile(r"(?<=[.!?])\s+")

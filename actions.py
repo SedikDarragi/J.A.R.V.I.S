@@ -1,6 +1,7 @@
 import ctypes
 import os
 import random
+import re
 import subprocess
 import threading
 import time
@@ -14,6 +15,8 @@ import media
 
 CITY = ""
 LIKED_PLAYLIST_ID = ""
+WEB_QUERY = ""
+WEB_RESULTS = []
 
 WMO_CODES = {
     0: "clear skies",
@@ -80,7 +83,10 @@ APPS = {
     "edge": "msedge",
     "chrome": "chrome",
     "firefox": "firefox",
-    "vs code": "code",
+    "visual studio code": "vscode",
+    "vs code": "vscode",
+    "vscode": "vscode",
+    "code": "vscode",
     "youtube": "https://www.youtube.com",
 }
 
@@ -93,7 +99,7 @@ _TIMERS = []
 
 
 def _shell(cmd: str) -> None:
-    subprocess.Popen(f'cmd /c start "" {cmd}', shell=True)
+    subprocess.Popen(f'cmd /c start "" {cmd} 2>nul', shell=True)
 
 
 def _zen_exe() -> str | None:
@@ -101,6 +107,17 @@ def _zen_exe() -> str | None:
         os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Zen Browser", "zen.exe"),
         r"C:\Program Files\Zen Browser\zen.exe",
         r"C:\Program Files (x86)\Zen Browser\zen.exe",
+    ):
+        if os.path.exists(p):
+            return p
+    return None
+
+
+def _vscode_exe() -> str | None:
+    for p in (
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Microsoft VS Code", "Code.exe"),
+        r"C:\Program Files\Microsoft VS Code\Code.exe",
+        r"C:\Program Files (x86)\Microsoft VS Code\Code.exe",
     ):
         if os.path.exists(p):
             return p
@@ -201,7 +218,13 @@ def open_app(args: dict) -> str:
     target = APPS.get(name)
     if target is None:
         target = name
-    if target.startswith("http"):
+    if target == "vscode":
+        exe = _vscode_exe()
+        if exe:
+            subprocess.Popen([exe], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+        else:
+            _shell("code")
+    elif target.startswith("http"):
         _open_url(target)
     else:
         _shell(target)
@@ -218,11 +241,110 @@ def open_website(args: dict) -> str:
     return f"Opening {url}, sir."
 
 
+def _fetch_search(query: str) -> list:
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"}
+    clean = lambda s: re.sub(r"<[^>]+>", "", s).strip()
+    tries = [
+        ("https://html.duckduckgo.com/html/", {"q": query}, r'class="result__a"[^>]*>(.*?)</a>', r'class="result__snippet"[^>]*>(.*?)</a>'),
+        ("https://lite.duckduckgo.com/lite/", {"q": query}, r'<a rel="nofollow" href="[^"]*"[^>]*>(.*?)</a>', r'<td class="result-snippet">(.*?)</td>'),
+        ("https://www.bing.com/search", {"q": query}, r'<h2><a href="[^"]*"[^>]*>(.*?)</a></h2>', r'<p[^>]*>(.*?)</p>'),
+    ]
+    for url, params, tp, sp in tries:
+        try:
+            r = requests.get(url, params=params, headers=headers, timeout=10)
+            titles = re.findall(tp, r.text)
+            snippets = re.findall(sp, r.text)
+            items = []
+            for i, t in enumerate(titles[:5]):
+                sn = clean(snippets[i]) if i < len(snippets) else ""
+                items.append(f"- {clean(t)}" + (f": {sn}" if sn else ""))
+            if items:
+                return items
+        except Exception:
+            continue
+    return []
+
+
+FIAT = {
+    "dollar": "USD", "dollars": "USD", "usd": "USD", "us": "USD", "american": "USD",
+    "euro": "EUR", "euros": "EUR", "eur": "EUR",
+    "pound": "GBP", "pounds": "GBP", "gbp": "GBP", "british pound": "GBP",
+    "dinar": "TND", "dinars": "TND", "tnd": "TND", "tunisian dinar": "TND", "tunisian dinars": "TND", "tunisian": "TND",
+    "yen": "JPY", "jpy": "JPY", "yuan": "CNY", "cny": "CNY", "renminbi": "CNY",
+    "cad": "CAD", "canadian": "CAD", "aud": "AUD", "australian": "AUD", "chf": "CHF", "swiss franc": "CHF",
+    "aed": "AED", "dirham": "AED", "sar": "SAR", "riyal": "SAR", "egp": "EGP", "egyptian pound": "EGP",
+    "mad": "MAD", "moroccan dirham": "MAD", "try": "TRY", "lira": "TRY", "inr": "INR", "rupee": "INR",
+}
+
+CRYPTO = {
+    "bitcoin": "bitcoin", "btc": "bitcoin",
+    "ethereum": "ethereum", "eth": "ethereum",
+    "solana": "solana", "sol": "solana",
+    "dogecoin": "dogecoin", "doge": "dogecoin",
+    "xrp": "ripple", "cardano": "cardano", "ada": "cardano",
+}
+
+
+def _norm_cur(raw: str) -> str:
+    s = raw.strip().lower()
+    if s in FIAT:
+        return FIAT[s]
+    if s in CRYPTO:
+        return CRYPTO[s]
+    return s.upper()
+
+
+def convert_currency(args: dict) -> str:
+    from_c = _norm_cur(str(args.get("from", "")))
+    to_c = _norm_cur(str(args.get("to", "")))
+    if not from_c or not to_c:
+        return "Which currencies would you like me to convert, sir?"
+    try:
+        amount = float(args.get("amount") or 1)
+    except (TypeError, ValueError):
+        amount = 1.0
+    try:
+        if from_c in CRYPTO.values() or to_c in CRYPTO.values():
+            if from_c in CRYPTO.values():
+                r = requests.get(
+                    "https://api.coingecko.com/api/v3/simple/price",
+                    params={"ids": from_c, "vs_currencies": to_c.lower()},
+                    timeout=15,
+                ).json()
+                rate = r.get(from_c, {}).get(to_c.lower())
+            else:
+                r = requests.get(
+                    "https://api.coingecko.com/api/v3/simple/price",
+                    params={"ids": to_c, "vs_currencies": from_c.lower()},
+                    timeout=15,
+                ).json()
+                inv = r.get(to_c, {}).get(from_c.lower())
+                rate = 1.0 / inv if inv else None
+        else:
+            r = requests.get(f"https://open.er-api.com/v6/latest/{from_c}", timeout=15).json()
+            rate = r.get("rates", {}).get(to_c)
+        if rate is None:
+            return f"I'm afraid I couldn't find a rate for {from_c} to {to_c}, sir."
+    except Exception:
+        return "I'm afraid I couldn't reach the exchange service, sir."
+    total = amount * rate
+    if amount == 1:
+        return f"One {from_c} is currently about {rate:.2f} {to_c}, sir."
+    return f"{amount:g} {from_c} is about {total:.2f} {to_c}, sir."
+
+
 def web_search(args: dict) -> str:
+    global WEB_QUERY, WEB_RESULTS
     query = str(args.get("query", "")).strip()
     if not query:
         return "What would you like me to search for, sir?"
-    _open_url(f"https://www.google.com/search?q={quote(query)}")
+    background = bool(args.get("background", False))
+    WEB_QUERY = query
+    WEB_RESULTS = _fetch_search(query)
+    if not background:
+        _open_url(f"https://www.google.com/search?q={quote(query)}")
+    if WEB_RESULTS:
+        return ""
     return f"Searching the web for {query}, sir."
 
 
@@ -345,6 +467,7 @@ HANDLERS = {
     "open_website": open_website,
     "web_search": web_search,
     "play_youtube": play_youtube,
+    "convert_currency": convert_currency,
     "set_volume": set_volume,
     "mute": mute,
     "unmute": unmute,
