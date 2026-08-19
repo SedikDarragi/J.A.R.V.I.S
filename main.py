@@ -100,7 +100,15 @@ class SpeechManager:
         self.voice = voice
         self.queue = Queue()
         self.speaking = False
+        self._last = ""
         threading.Thread(target=self._worker, daemon=True).start()
+
+    def _similar(self, a: str, b: str) -> bool:
+        na = re.sub(r"[^a-z ]", "", a.lower())
+        nb = re.sub(r"[^a-z ]", "", b.lower())
+        if len(na) < 12 or len(nb) < 12:
+            return False
+        return na in nb or nb in na or na.startswith(nb[:12]) or nb.startswith(na[:12])
 
     def _worker(self) -> None:
         while True:
@@ -115,8 +123,14 @@ class SpeechManager:
                 self.queue.task_done()
 
     def say(self, text: str) -> None:
-        if text:
-            self.queue.put(text)
+        if not text:
+            return
+        if self._last and self._similar(text, self._last):
+            print(f"  [speech] skipped duplicate: {text}")
+            self._last = text
+            return
+        self._last = text
+        self.queue.put(text)
 
     def say_sync(self, text: str) -> None:
         self.say(text)
