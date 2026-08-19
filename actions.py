@@ -365,8 +365,9 @@ def _launch_vscode(folder: str) -> None:
 
 def _launch_opencode(folder: str, name: str) -> None:
     subprocess.Popen(
-        f'cmd /c start "opencode - {name}" cmd /k cd /d "{folder}" && opencode',
-        shell=True,
+        ["powershell", "-NoProfile", "-Command",
+         f"Start-Process cmd -ArgumentList '/k','opencode' -WorkingDirectory '{folder}'"],
+        creationflags=subprocess.CREATE_NO_WINDOW,
     )
 
 

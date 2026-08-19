@@ -27,12 +27,46 @@ _STEPS = [
 _ILLEGAL = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
 
+_NAME_PATTERNS = [
+    r"\bcall\s+it\s+",
+    r"\bcall\s+the\s+project\s+",
+    r"\bit(?:'s| is)?\s+called\s+",
+    r"\bis\s+called\s+",
+    r"\bthe\s+(?:project\s+)?name\s+is\s+",
+    r"\bname\s+it\s+",
+    r"\b(?:we(?:'ll| will| would)?|lets|let'?s)\s+(?:call|name)\s+(?:it|the project|this)\s+",
+]
+
+_LOCATION_PATTERNS = [
+    r"\bput\s+it\s+in\s+",
+    r"\bput\s+it\s+at\s+",
+    r"\bcreate\s+it\s+(?:in|at)\s+",
+    r"\bmake\s+it\s+in\s+",
+    r"\bstore\s+it\s+in\s+",
+    r"\bsave\s+it\s+in\s+",
+]
+
+
+def _extract_after(text: str, patterns: list) -> str:
+    cut = None
+    for pat in patterns:
+        m = re.search(pat, text)
+        if m and (cut is None or m.end() > cut):
+            cut = m.end()
+    return text[cut:] if cut is not None else text
+
+
 def _sanitize_name(raw: str) -> str:
-    return _ILLEGAL.sub("", raw).strip().strip(". ")
+    name = _extract_after(raw, _NAME_PATTERNS)
+    name = re.sub(r"^(?:the|a|an)\s+", "", name)
+    name = re.sub(r"\s+(?:please|for me|thanks|thank you|okay|ok|then)\s*$", "", name)
+    name = name.strip().strip("'\".,;:!?")
+    name = _ILLEGAL.sub("", name).strip().strip(". ")
+    return name
 
 
 def _resolve_location(raw: str) -> str:
-    s = raw.strip().strip('"').strip()
+    s = _extract_after(raw.strip(), _LOCATION_PATTERNS).strip().strip('"').strip()
     low = s.lower()
     if low in ("default", "default location", "projects", "projects folder", "usual", "the usual"):
         return DEFAULT_LOCATION
