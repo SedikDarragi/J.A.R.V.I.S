@@ -239,6 +239,12 @@ class JarvisApp:
             return
         if not text.startswith("/"):
             print(f"\n  YOU    > {text}")
+        if actions.WIZARD_ACTIVE:
+            msg = actions.project_feed(text)
+            if msg:
+                print(f"\n  JARVIS > {msg}")
+                self.speech.say_sync(msg)
+            return
         with self.processing:
             t0 = time.time()
             try:

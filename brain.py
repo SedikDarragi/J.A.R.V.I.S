@@ -26,6 +26,7 @@ AVAILABLE ACTIONS (respond with exactly one):
 - take_screenshot: no args
 - set_timer: args {"minutes": N}
 - weather: args {"city": "Paris"} or {"city": ""} to use the user's city
+- new_project: no args - starts the guided project setup wizard: asks the project name, project type, storage location, and which AI model opencode should use, then creates the folder and opens Visual Studio Code and opencode. Use for "start a new project", "i want to start a coding project", "new project", "lets build something new".
 - "summary of today" / "give me the summary of today" / "what is today": reply directly with today's date, the current time and the weather for the user's city (call the weather action when the city is set). NEVER use open_app for a summary or for "today". - you have NO built-in knowledge of current weather, temperature or forecasts, so you MUST call this action for ANY weather-related question
 
 RESPOND ONLY WITH A SINGLE VALID JSON OBJECT, no other text:
@@ -61,7 +62,8 @@ user: "set a 10 minute timer" -> {"reply": "Setting a ten minute timer, sir.", "
 user: "jarvis open code" -> {"reply": "Opening Visual Studio Code, sir.", "action": {"name": "open_app", "args": {"name": "visual studio code"}}}
 user: "jarvis i want to code" -> {"reply": "Opening Visual Studio Code, sir.", "action": {"name": "open_app", "args": {"name": "visual studio code"}}}
 user: "jarvis open vs code" -> {"reply": "Opening Visual Studio Code, sir.", "action": {"name": "open_app", "args": {"name": "visual studio code"}}}
-user: "hello" -> {"reply": "Good evening, sir. How may I assist you today?"}"""
+user: "hello" -> {"reply": "Good evening, sir. How may I assist you today?"}
+user: "jarvis i want to start a new project" -> {"reply": "Certainly, sir. Let's get you set up.", "action": {"name": "new_project", "args": {}}}"""
 
 _SENT_END = re.compile(r"(?<=[.!?])\s+")
 

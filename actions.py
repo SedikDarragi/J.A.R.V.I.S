@@ -12,11 +12,14 @@ from urllib.parse import quote
 import requests
 
 import media
+import project
 
 CITY = ""
 LIKED_PLAYLIST_ID = ""
 WEB_QUERY = ""
 WEB_RESULTS = []
+WIZARD_ACTIVE = False
+_wizard = None
 
 WMO_CODES = {
     0: "clear skies",
@@ -333,6 +336,44 @@ def convert_currency(args: dict) -> str:
     return f"{amount:g} {from_c} is about {total:.2f} {to_c}, sir."
 
 
+def new_project(args: dict) -> str:
+    global WIZARD_ACTIVE, _wizard
+    _wizard = project.ProjectWizard()
+    WIZARD_ACTIVE = True
+    return _wizard.start()
+
+
+def project_feed(text: str):
+    global WIZARD_ACTIVE, _wizard
+    if _wizard is None:
+        WIZARD_ACTIVE = False
+        return None
+    kind, msg = _wizard.answer(text)
+    if kind in ("done", "cancel"):
+        WIZARD_ACTIVE = False
+        _wizard = None
+    return msg
+
+
+def _launch_vscode(folder: str) -> None:
+    exe = _vscode_exe()
+    if exe:
+        subprocess.Popen([exe, folder], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+    else:
+        subprocess.Popen(f'cmd /c start "" code "{folder}"', shell=True)
+
+
+def _launch_opencode(folder: str, name: str) -> None:
+    subprocess.Popen(
+        f'cmd /c start "opencode - {name}" cmd /k cd /d "{folder}" && opencode',
+        shell=True,
+    )
+
+
+project.LAUNCH_VSCODE = _launch_vscode
+project.LAUNCH_OPENCODE = _launch_opencode
+
+
 def web_search(args: dict) -> str:
     global WEB_QUERY, WEB_RESULTS
     query = str(args.get("query", "")).strip()
@@ -475,6 +516,7 @@ HANDLERS = {
     "take_screenshot": take_screenshot,
     "set_timer": set_timer,
     "weather": weather,
+    "new_project": new_project,
 }
 
 
