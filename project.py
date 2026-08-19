@@ -68,13 +68,20 @@ def _sanitize_name(raw: str) -> str:
 def _resolve_location(raw: str) -> str:
     s = _extract_after(raw.strip(), _LOCATION_PATTERNS).strip().strip('"').strip()
     low = s.lower()
-    if low in ("default", "default location", "projects", "projects folder", "usual", "the usual"):
+    looks_path = os.path.isabs(s) or bool(re.match(r"^[a-z]:[\\/]", low))
+    if not looks_path:
+        if "default" in low or "usual" in low or "projects folder" in low or low == "projects":
+            return DEFAULT_LOCATION
+        if "desktop" in low:
+            return os.path.join(os.path.expanduser("~"), "Desktop")
+        if "documents" in low:
+            return os.path.join(os.path.expanduser("~"), "Documents")
+    s = os.path.expandvars(os.path.expanduser(s))
+    if not os.path.isabs(s):
+        if s and s not in (".", "~"):
+            return os.path.join(DEFAULT_LOCATION, s.lstrip("\\/"))
         return DEFAULT_LOCATION
-    if low in ("desktop", "my desktop"):
-        return os.path.join(os.path.expanduser("~"), "Desktop")
-    if low in ("documents", "my documents"):
-        return os.path.join(os.path.expanduser("~"), "Documents")
-    return os.path.expandvars(os.path.expanduser(s))
+    return s
 
 
 def _resolve_model(raw: str) -> str:

@@ -362,9 +362,18 @@ def project_feed(text: str):
 def _launch_vscode(folder: str) -> None:
     exe = _vscode_exe()
     if exe:
-        subprocess.Popen([exe, folder], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
-    else:
-        subprocess.Popen(f'cmd /c start "" code "{folder}"', shell=True)
+        subprocess.Popen([exe, "--new-window", folder], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+        return
+    shims = [
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Microsoft VS Code", "bin", "code.cmd"),
+        r"C:\Program Files\Microsoft VS Code\bin\code.cmd",
+        r"C:\Program Files (x86)\Microsoft VS Code\bin\code.cmd",
+    ]
+    for shim in shims:
+        if os.path.exists(shim):
+            subprocess.Popen(f'cmd /c ""{shim}" --new-window "{folder}""', shell=True)
+            return
+    subprocess.Popen(f'cmd /c start "" code --new-window "{folder}"', shell=True)
 
 
 def _launch_opencode(folder: str, name: str) -> None:
