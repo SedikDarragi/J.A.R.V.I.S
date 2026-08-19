@@ -336,11 +336,15 @@ def convert_currency(args: dict) -> str:
     return f"{amount:g} {from_c} is about {total:.2f} {to_c}, sir."
 
 
-def new_project(args: dict) -> str:
+def begin_wizard() -> str:
     global WIZARD_ACTIVE, _wizard
     _wizard = project.ProjectWizard()
     WIZARD_ACTIVE = True
     return _wizard.start()
+
+
+def new_project(args: dict) -> str:
+    return begin_wizard()
 
 
 def project_feed(text: str):

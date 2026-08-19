@@ -92,6 +92,20 @@ def _resolve_model(raw: str) -> str:
     return key
 
 
+TRIGGER_PATTERNS = [
+    r"\b(?:start|begin|create|make|build|set\s*up|open)\s+(?:a\s+)?new\s+project\b",
+    r"\bnew\s+(?:coding|code|programming)\s+project\b",
+    r"\bi(?:'d| would)?\s+like\s+to\s+(?:start|begin|create|make|build|set\s*up)\s+(?:a\s+)?new\s+project\b",
+    r"\bi\s+want\s+to\s+(?:start|begin|create|make|build|set\s*up)\s+(?:a\s+)?new\s+project\b",
+    r"\b(?:let'?s|lets)\s+(?:start|begin|create|make|build|set\s*up)\s+(?:a\s+)?new\s+project\b",
+]
+
+
+def is_trigger(text: str) -> bool:
+    low = text.lower()
+    return any(re.search(p, low) for p in TRIGGER_PATTERNS)
+
+
 class ProjectWizard:
     def __init__(self):
         self.answers = {}

@@ -18,6 +18,7 @@ except Exception:
 from pynput import keyboard
 
 import actions
+import project
 from brain import JarvisBrain
 from stt import SpeechToText
 from tts import JarvisVoice
@@ -245,12 +246,20 @@ class JarvisApp:
                 print(f"\n  JARVIS > {msg}")
                 self.speech.say_sync(msg)
             return
+        if project.is_trigger(text):
+            msg = actions.begin_wizard()
+            print(f"\n  JARVIS > {msg}")
+            self.speech.say_sync(msg)
+            return
         with self.processing:
             t0 = time.time()
             try:
                 reply, action = "", None
                 for attempt in range(3):
-                    reply, action = self._ask(text, temperature=0.6 + 0.2 * attempt)
+                    prompt_text = text
+                    if attempt > 0:
+                        prompt_text = text + "\n\n(Answer now. If you were about to reply with nothing, give a brief normal reply instead.)"
+                    reply, action = self._ask(prompt_text, temperature=0.6 + 0.2 * attempt)
                     if reply.strip():
                         break
                     self._flush_reply()
