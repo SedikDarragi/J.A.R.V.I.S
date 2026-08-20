@@ -23,6 +23,18 @@ from brain import JarvisBrain
 from stt import SpeechToText
 from tts import JarvisVoice
 
+
+def _disable_console_quickedit() -> None:
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.GetStdHandle(-10)
+        mode = ctypes.c_uint()
+        if kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+            kernel32.SetConsoleMode(handle, mode.value & ~0x0040)
+    except Exception:
+        pass
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 OLLAMA_EXE = os.path.join(BASE_DIR, "ollama", "ollama.exe")
@@ -38,6 +50,7 @@ DEFAULT_CONFIG = {
     "mic_device": None,
     "city": "",
     "liked_playlist": "",
+    "audio_device": "",
     "stt_engine": "auto",
     "whisper_model": "base",
 }
@@ -155,7 +168,7 @@ class JarvisApp:
         self.brain.ensure_model()
         voice_path = os.path.join(BASE_DIR, self.cfg["voice"]) if not os.path.isabs(self.cfg["voice"]) else self.cfg["voice"]
         print("[boot] loading voice...")
-        self.voice = JarvisVoice(voice_path)
+        self.voice = JarvisVoice(voice_path, self.cfg.get("audio_device", ""))
         self.speech = SpeechManager(self.voice)
         self.stt = SpeechToText(self.cfg["language"], self.cfg["mic_device"], self.cfg.get("stt_engine", "auto"), self.cfg.get("whisper_model", "base"))
         if self.stt.engine != "google":
@@ -207,17 +220,6 @@ class JarvisApp:
             else:
                 self.speech.say(text)
 
-    def _feed_reply(self, chunk: str) -> None:
-        self._partial_reply += chunk
-        while True:
-            m = re.search(r"(?<=[.!?])\s+", self._partial_reply)
-            if not m:
-                break
-            sent = self._partial_reply[:m.start()].strip()
-            self._partial_reply = self._partial_reply[m.start():]
-            if sent:
-                self.speech.say(sent)
-
     def _flush_reply(self) -> None:
         if self._partial_reply.strip():
             self.speech.say(self._partial_reply.strip())
@@ -227,9 +229,7 @@ class JarvisApp:
         reply = ""
         action = None
         for event in self.brain.ask_stream(text, temperature=temperature):
-            if event["type"] == "text":
-                self._feed_reply(event["text"])
-            elif event["type"] == "done":
+            if event["type"] == "done":
                 reply = event["reply"]
                 action = event["action"]
         return reply, action
@@ -302,8 +302,10 @@ class JarvisApp:
             self.brain.commit_turn(text, reply, calls, results)
             if ack and ack.strip() and reply != ack:
                 print(f"\n  JARVIS > {ack.strip()}")
+                self.speech.say_sync(ack.strip())
             if reply.strip():
                 print(f"\n  JARVIS > {reply.strip()}")
+                self.speech.say(reply.strip())
             if spoken:
                 self.speech.flush()
                 for res in spoken:
@@ -402,4 +404,5 @@ class JarvisApp:
 
 
 if __name__ == "__main__":
+    _disable_console_quickedit()
     JarvisApp().run()
