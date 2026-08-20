@@ -167,7 +167,8 @@ class JarvisBrain:
             "model": self.model,
             "messages": self._messages(user_text),
             "stream": True,
-            "options": {"temperature": temperature, "num_ctx": 8192, "num_predict": 400},
+            "keep_alive": "30m",
+            "options": {"temperature": temperature, "num_ctx": 4096, "num_predict": 200},
         }
         extractor = ReplyExtractor()
         raw = ""
