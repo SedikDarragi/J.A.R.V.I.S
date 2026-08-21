@@ -14,6 +14,7 @@ import requests
 import media
 import project
 import apps
+import steam
 
 CITY = ""
 LIKED_PLAYLIST_ID = ""
@@ -531,6 +532,33 @@ def weather(args: dict) -> str:
         return "I'm afraid I couldn't reach the weather service, sir."
 
 
+def launch_game(args: dict) -> str:
+    name = args.get("name", "").strip()
+    if not name:
+        return "Which game should I launch, sir?"
+    mgr = steam.get_manager()
+    game = mgr.find_game(name)
+    if not game:
+        installed = [g["name"] for g in mgr.list_games()]
+        return f"I couldn't find a game called {name} in your Steam library, sir."
+    if not mgr.is_installed(game["appid"]):
+        return f"{game['name']} isn't installed. Shall I start the download, sir?"
+    return mgr.launch(game["appid"])
+
+
+def install_game(args: dict) -> str:
+    name = args.get("name", "").strip()
+    if not name:
+        return "Which game should I install, sir?"
+    mgr = steam.get_manager()
+    game = mgr.find_game(name)
+    if not game:
+        return f"I couldn't find {name} in the Steam store, sir."
+    if mgr.is_installed(game["appid"]):
+        return f"{game['name']} is already installed, sir."
+    return mgr.install(game["appid"])
+
+
 HANDLERS = {
     "play_music": play_music,
     "pause_music": pause_music,
@@ -550,6 +578,8 @@ HANDLERS = {
     "set_timer": set_timer,
     "weather": weather,
     "new_project": new_project,
+    "launch_game": launch_game,
+    "install_game": install_game,
 }
 
 
