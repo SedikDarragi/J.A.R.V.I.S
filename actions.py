@@ -13,6 +13,7 @@ import requests
 
 import media
 import project
+import apps
 
 CITY = ""
 LIKED_PLAYLIST_ID = ""
@@ -20,6 +21,9 @@ WEB_QUERY = ""
 WEB_RESULTS = []
 WIZARD_ACTIVE = False
 _wizard = None
+
+_app_index = apps.AppIndex()
+threading.Thread(target=_app_index.build, daemon=True).start()
 
 WMO_CODES = {
     0: "clear skies",
@@ -214,23 +218,38 @@ def previous_track(args: dict) -> str:
     return "Going back to the previous track, sir."
 
 
+_PATH_APPS = {"spotify", "discord", "steam", "whatsapp", "chrome", "firefox"}
+
+
 def open_app(args: dict) -> str:
     name = str(args.get("name", "")).strip().lower()
     if not name:
         return "I'm afraid you didn't tell me which application, sir."
-    target = APPS.get(name)
-    if target is None:
-        target = name
-    if target == "vscode":
-        exe = _vscode_exe()
-        if exe:
-            subprocess.Popen([exe], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+    if name in _PATH_APPS:
+        hit = _app_index.find(name)
+        if hit:
+            _display, path = hit
+            os.startfile(path)
+            return f"Opening {_display} for you, sir."
+    if name in APPS:
+        target = APPS[name]
+        if target == "vscode":
+            exe = _vscode_exe()
+            if exe:
+                subprocess.Popen([exe], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+            else:
+                _shell("code")
+        elif target.startswith("http"):
+            _open_url(target)
         else:
-            _shell("code")
-    elif target.startswith("http"):
-        _open_url(target)
-    else:
-        _shell(target)
+            _shell(target)
+        return f"Opening {name} for you, sir."
+    hit = _app_index.find(name)
+    if hit:
+        _display, path = hit
+        os.startfile(path)
+        return f"Opening {_display} for you, sir."
+    _shell(name)
     return f"Opening {name} for you, sir."
 
 

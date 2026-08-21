@@ -70,6 +70,7 @@ HELP = """COMMANDS
   /mic <id>           : choose a microphone
   /stt <engine>       : speech engine: auto (recommended), whisper, google
   /model <name>       : change the AI model
+  say "focus mode on/off": pin the AI in memory for instant answers
   /help               : show this help
   /quit               : quit Jarvis"""
 
@@ -250,6 +251,27 @@ class JarvisApp:
             msg = actions.begin_wizard()
             print(f"\n  JARVIS > {msg}")
             self.speech.say_sync(msg)
+            return
+        if re.search(r"\bfocus\s*mode\b", text, re.IGNORECASE):
+            turn_off = bool(re.search(r"\b(off|exit|leave|disable|deactivate|normal|stand\s*down)\b", text, re.IGNORECASE))
+            self.brain.focus_mode = not turn_off
+            if self.brain.focus_mode:
+                msg = "Focus mode engaged, sir. My mind stays sharp and ready."
+                print(f"\n  JARVIS > {msg}")
+                self.speech.say_sync(msg)
+
+                def _prewarm() -> None:
+                    try:
+                        for _ in self.brain.ask_stream("Reply with the single word: Ready."):
+                            pass
+                    except Exception as e:
+                        print(f"  [focus] prewarm failed: {e}")
+
+                threading.Thread(target=_prewarm, daemon=True).start()
+            else:
+                msg = "Standing down from focus mode, sir."
+                print(f"\n  JARVIS > {msg}")
+                self.speech.say_sync(msg)
             return
         with self.processing:
             t0 = time.time()
