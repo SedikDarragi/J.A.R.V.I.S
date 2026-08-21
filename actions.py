@@ -539,10 +539,10 @@ def launch_game(args: dict) -> str:
     mgr = steam.get_manager()
     game = mgr.find_game(name)
     if not game:
-        installed = [g["name"] for g in mgr.list_games()]
-        return f"I couldn't find a game called {name} in your Steam library, sir."
+        return f"I couldn't find {name} on Steam, sir."
     if not mgr.is_installed(game["appid"]):
-        return f"{game['name']} isn't installed. Shall I start the download, sir?"
+        # Auto-install if not installed
+        return mgr.install(game["appid"])
     return mgr.launch(game["appid"])
 
 

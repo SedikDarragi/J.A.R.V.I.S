@@ -3,6 +3,13 @@ import re
 import glob
 import subprocess
 import time
+import urllib.parse
+
+try:
+    import requests
+    _HAS_REQUESTS = True
+except ImportError:
+    _HAS_REQUESTS = False
 
 # ---------------------------------------------------------------------------
 # Steam game manager – discovers installed games, launches & installs via
@@ -161,6 +168,33 @@ class SteamManager:
                 best = self._games[appid]
         if best and best_score > 0:
             return best
+        # Fallback: search the Steam Store API
+        return self._search_store(query)
+
+    # ------------------------------------------------------------------
+    # Steam Store search (for games not yet installed)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _search_store(query: str) -> dict | None:
+        """Search store.steampowered.com for a game by name. Returns dict or None."""
+        if not _HAS_REQUESTS:
+            return None
+        try:
+            url = f"https://store.steampowered.com/api/storesearch/?term={urllib.parse.quote(query)}&l=english&cc=US"
+            r = requests.get(url, timeout=8)
+            data = r.json()
+            items = data.get("items", [])
+            if not items:
+                return None
+            # Pick the first result
+            item = items[0]
+            appid = str(item.get("id", ""))
+            name = item.get("name", "")
+            if appid and name:
+                return {"name": name, "appid": appid, "installed": False}
+        except Exception:
+            pass
         return None
 
     def list_games(self) -> list[dict]:
