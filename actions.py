@@ -577,6 +577,8 @@ HANDLERS = {
     "set_volume": set_volume,
     "mute": mute,
     "unmute": unmute,
+    "deafen": mute,
+    "undeafen": unmute,
     "lock_pc": lock_pc,
     "take_screenshot": take_screenshot,
     "set_timer": set_timer,

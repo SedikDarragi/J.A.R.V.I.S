@@ -18,7 +18,7 @@ Or just {"reply":"..."} for conversation with no action.
 - web_search: {"query":"...","background":false} - use for ALL search/lookup questions. background:true if user says "in background"
 - convert_currency: {"amount":N,"from":"USD","to":"TND"} - use for ALL currency questions, never guess rates
 - play_youtube: {"query":"..."}
-- set_volume: {"level":0-100} / mute / unmute: no args
+- set_volume: {"level":0-100} / mute / unmute / deafen / undeafen: no args
 - lock_pc / take_screenshot: no args
 - set_timer: {"minutes":N}
 - weather: {"city":"Paris"} or {"city":""} for user's city
