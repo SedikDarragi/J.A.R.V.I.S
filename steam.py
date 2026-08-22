@@ -87,9 +87,33 @@ class SteamManager:
             for manifest in glob.glob(os.path.join(steamapps, "appmanifest_*.acf")):
                 self._parse_manifest(manifest)
         # Index uninstalled library games (have app ID but no manifest)
-        for appid in all_lib_appids:
-            if appid not in self._games:
-                self._games[appid] = {"name": "", "appid": appid, "installed": False}
+        uninstalled = [appid for appid in all_lib_appids if appid not in self._games]
+        if uninstalled:
+            self._preload_names(uninstalled)
+
+    def _preload_names(self, appids: list[str]) -> None:
+        """Look up game names from Steam API for uninstalled library games."""
+        if not _HAS_REQUESTS:
+            return
+        for appid in appids:
+            try:
+                url = f"https://store.steampowered.com/api/appdetails?appids={appid}&l=english"
+                r = requests.get(url, timeout=5)
+                data = r.json()
+                info = data.get(appid, {})
+                if info.get("success"):
+                    name = info["data"].get("name", "")
+                    if name:
+                        name = name.encode("utf-8", errors="replace").decode("utf-8", errors="replace")
+                        name = re.sub(r"[\x00-\x1f\x7f-\x9f]", "", name).strip()
+                        self._games[appid] = {"name": name, "appid": appid, "installed": False}
+                        normed = self._norm(name)
+                        self._name_index[normed] = appid
+                        for word in normed.split():
+                            if len(word) > 2 and word not in self._name_index:
+                                self._name_index[word] = appid
+            except Exception:
+                pass
 
     def _library_dirs(self) -> list[str]:
         vdf = os.path.join(self._steam_path, "steamapps", "libraryfolders.vdf")
@@ -205,19 +229,17 @@ class SteamManager:
             name = item.get("name", "")
             if not appid or not name:
                 return None
-            # Clean name
             name = name.encode("utf-8", errors="replace").decode("utf-8", errors="replace")
             name = re.sub(r"[\x00-\x1f\x7f-\x9f]", "", name).strip()
-            # If this appid is already in our library (uninstalled), update it
-            if appid in self._games:
-                self._games[appid]["name"] = name
-                normed = self._norm(name)
-                self._name_index[normed] = appid
-                for word in normed.split():
-                    if len(word) > 2 and word not in self._name_index:
-                        self._name_index[word] = appid
-                return self._games[appid]
-            return {"name": name, "appid": appid, "installed": False}
+            # Always add to the index so install/launch can find it by appid
+            installed = appid in self._games and self._games[appid].get("installed")
+            self._games[appid] = {"name": name, "appid": appid, "installed": bool(installed)}
+            normed = self._norm(name)
+            self._name_index[normed] = appid
+            for word in normed.split():
+                if len(word) > 2 and word not in self._name_index:
+                    self._name_index[word] = appid
+            return self._games[appid]
         except Exception:
             pass
         return None
@@ -258,30 +280,44 @@ class SteamManager:
         except Exception:
             return False
 
+    def _run_steam_uri(self, uri: str) -> bool:
+        """Run a steam:// URI by calling steam.exe directly. More reliable than os.startfile."""
+        if self._steam_path:
+            exe = os.path.join(self._steam_path, "steam.exe")
+            if os.path.isfile(exe):
+                try:
+                    subprocess.Popen([exe, uri], cwd=self._steam_path)
+                    return True
+                except Exception:
+                    pass
+        # Fallback: os.startfile
+        try:
+            os.startfile(uri)
+            return True
+        except Exception:
+            return False
+
     def launch(self, appid: str) -> str:
         game = self._games.get(appid)
         if not game:
             return f"Game with appid {appid} not found."
         self._ensure_steam_running()
-        try:
-            os.startfile(f"steam://rungameid/{appid}")
+        if self._run_steam_uri(f"steam://rungameid/{appid}"):
             return f"Launching {game['name']}, sir."
-        except Exception as e:
-            return f"Failed to launch {game['name']}: {e}"
+        return f"Failed to launch {game['name']}."
 
     def install(self, appid: str) -> str:
         game = self._games.get(appid)
         if not game:
             return f"Game with appid {appid} not found."
         self._ensure_steam_running()
-        try:
-            os.startfile(f"steam://install/{appid}")
+        if self._run_steam_uri(f"steam://install/{appid}"):
             return f"Starting download for {game['name']}, sir."
-        except Exception as e:
-            return f"Failed to start download for {game['name']}: {e}"
+        return f"Failed to start download for {game['name']}."
 
     def is_installed(self, appid: str) -> bool:
-        return appid in self._games
+        g = self._games.get(appid)
+        return bool(g and g.get("installed"))
 
 
 # ---------------------------------------------------------------------------
