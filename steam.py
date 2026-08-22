@@ -73,12 +73,23 @@ class SteamManager:
     def _scan_games(self) -> None:
         if not self._steam_path:
             return
+        vdf = os.path.join(self._steam_path, "steamapps", "libraryfolders.vdf")
+        all_lib_appids = set()
+        if os.path.isfile(vdf):
+            with open(vdf, "r", encoding="utf-8", errors="replace") as f:
+                text = f.read()
+            for m in re.finditer(r'"(\d{3,7})"\s+"(\d+)"', text):
+                all_lib_appids.add(m.group(1))
         for lib_dir in self._library_dirs():
             steamapps = os.path.join(lib_dir, "steamapps")
             if not os.path.isdir(steamapps):
                 continue
             for manifest in glob.glob(os.path.join(steamapps, "appmanifest_*.acf")):
                 self._parse_manifest(manifest)
+        # Index uninstalled library games (have app ID but no manifest)
+        for appid in all_lib_appids:
+            if appid not in self._games:
+                self._games[appid] = {"name": "", "appid": appid, "installed": False}
 
     def _library_dirs(self) -> list[str]:
         vdf = os.path.join(self._steam_path, "steamapps", "libraryfolders.vdf")
@@ -140,25 +151,28 @@ class SteamManager:
 
     def find_game(self, query: str) -> dict | None:
         q = self._norm(query)
-        # Resolve abbreviations
         q = _ALIASES.get(q, q)
         # Exact match
         if q in self._name_index:
             return self._games[self._name_index[q]]
-        # Check each word of query individually
+        # Check each word of query individually (skip short/common words)
+        _STOP = {"the", "a", "an", "of", "and", "or", "for", "my", "on", "in", "to"}
         for word in q.split():
+            if word in _STOP or len(word) <= 2:
+                continue
             if word in self._name_index:
                 return self._games[self._name_index[word]]
         # Starts-with
         for norm, appid in self._name_index.items():
             if norm.startswith(q) or q.startswith(norm):
                 return self._games[appid]
-        # Substring
-        for norm, appid in self._name_index.items():
-            if q in norm or norm in q:
-                return self._games[appid]
-        # Word overlap
-        q_words = set(q.split())
+        # Substring (only if query is 2+ words to avoid false positives)
+        if len(q.split()) >= 2:
+            for norm, appid in self._name_index.items():
+                if q in norm or norm in q:
+                    return self._games[appid]
+        # Word overlap (all query words appear in game name, excluding stops)
+        q_words = set(w for w in q.split() if w not in _STOP and len(w) > 2)
         best, best_score = None, 0
         for norm, appid in self._name_index.items():
             g_words = set(norm.split())
@@ -175,8 +189,7 @@ class SteamManager:
     # Steam Store search (for games not yet installed)
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _search_store(query: str) -> dict | None:
+    def _search_store(self, query: str) -> dict | None:
         """Search store.steampowered.com for a game by name. Returns dict or None."""
         if not _HAS_REQUESTS:
             return None
@@ -187,12 +200,24 @@ class SteamManager:
             items = data.get("items", [])
             if not items:
                 return None
-            # Pick the first result
             item = items[0]
             appid = str(item.get("id", ""))
             name = item.get("name", "")
-            if appid and name:
-                return {"name": name, "appid": appid, "installed": False}
+            if not appid or not name:
+                return None
+            # Clean name
+            name = name.encode("utf-8", errors="replace").decode("utf-8", errors="replace")
+            name = re.sub(r"[\x00-\x1f\x7f-\x9f]", "", name).strip()
+            # If this appid is already in our library (uninstalled), update it
+            if appid in self._games:
+                self._games[appid]["name"] = name
+                normed = self._norm(name)
+                self._name_index[normed] = appid
+                for word in normed.split():
+                    if len(word) > 2 and word not in self._name_index:
+                        self._name_index[word] = appid
+                return self._games[appid]
+            return {"name": name, "appid": appid, "installed": False}
         except Exception:
             pass
         return None
