@@ -288,6 +288,7 @@ class JarvisApp:
                     if attempt < 2:
                         time.sleep(0.4)
                 print(f"  [timing] brain={time.time() - t0:.1f}s")
+                print(f"  [brain] action={action}")
             except Exception as e:
                 self._flush_reply()
                 self.speech.say_sync("I'm afraid my systems are struggling right now, sir.")

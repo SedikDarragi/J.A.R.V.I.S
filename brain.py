@@ -23,7 +23,7 @@ Or just {"reply":"..."} for conversation with no action.
 - set_timer: {"minutes":N}
 - weather: {"city":"Paris"} or {"city":""} for user's city
 - new_project: no args - guided project setup wizard
-- launch_game: {"name":"<game name>"} - launches a Steam game. Use for "play X", "launch X", "boot up X", "start X", "open X"
+- launch_game: {"name":"<game name>"} - launches a Steam game. Use for "play X", "i want to play X", "launch X", "boot up X", "start X", "open X"
 - install_game: {"name":"<game name>"} - downloads a Steam game. Use for "install X", "download X"
 
 RULES:
