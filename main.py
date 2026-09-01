@@ -64,7 +64,7 @@ BANNER = r"""
 
 HELP = """COMMANDS
   Hold LEFT CTRL      : push to talk (say anything)
-  F11                 : quit Jarvis
+  ESC                 : quit Jarvis
   Type in this window : send a typed message instead
   /devices            : list microphone devices
   /mic <id>           : choose a microphone
@@ -200,13 +200,13 @@ class JarvisApp:
             pass
 
     def _status(self) -> None:
-        print(f"\n  [PUSH-TO-TALK]  Hold LEFT CTRL and talk.  (F11 to quit)")
+        print(f"\n  [PUSH-TO-TALK]  Hold LEFT CTRL and talk.  (ESC to quit)")
         print("  " + "-" * 56)
 
     def on_press(self, key) -> None:
         if key == keyboard.Key.ctrl_l:
             self.ctrl_held = True
-        elif key == keyboard.Key.f11:
+        elif key == keyboard.Key.esc:
             print("\n  [system] Shutting down. Goodbye, sir.")
             self.quit_event.set()
 

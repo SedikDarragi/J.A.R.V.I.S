@@ -43,7 +43,7 @@ Copy-Item config.example.json config.json
 | Action | Effect |
 | --- | --- |
 | Hold **Left Ctrl** | Push-to-talk (say anything while held) |
-| **F11** | Quit |
+| **Escape** | Quit |
 | Type in the window | Send a typed message |
 | `/help` | Show all commands |
 | `/mic <id>` | Choose a microphone |
