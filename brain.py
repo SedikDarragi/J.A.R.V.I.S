@@ -40,7 +40,8 @@ RULES:
 - For weather or currency: ALWAYS use the action, never answer from knowledge.
 - For search/lookup: ALWAYS use web_search, never answer from knowledge.
 - For time/date: answer directly, no action needed.
-- Never invent action names. Use only the actions listed above."""
+- Never invent action names. Use only the actions listed above.
+- When asked about previous conversations, ONLY reference what is actually in the chat history. Never fabricate or invent past conversations. If you don't see something in the history, say so honestly."""
 
 _SENT_END = re.compile(r"(?<=[.!?])\s+")
 
