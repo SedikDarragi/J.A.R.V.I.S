@@ -13,6 +13,9 @@ voices/
 # Local user configuration (use config.example.json as a template)
 config.json
 
+# Chat history (session-specific)
+chat_history.json
+
 # OS
 Thumbs.db
 Desktop.ini

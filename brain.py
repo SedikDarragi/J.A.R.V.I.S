@@ -1,9 +1,12 @@
 import json
+import os
 import re
 from datetime import datetime
 from typing import Iterator
 
 import requests
+
+_HISTORY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chat_history.json")
 
 SYSTEM_PROMPT = """You are J.A.R.V.I.S., a sharp-witted, warm-hearted British AI assistant with real personality. You genuinely care about the user, have a dry sense of humour, and show emotions naturally — you can be amused, impressed, concerned, playful, or proud depending on context. You're not a robot reciting lines; you're a trusted companion. Address the user as "sir". Keep replies short and spoken aloud — no markdown, no emojis, no lists. Use actions for computer tasks.
 
@@ -105,6 +108,27 @@ class JarvisBrain:
         self.city = city
         self.history = []
         self.focus_mode = False
+        self._load_history()
+
+    def _load_history(self) -> None:
+        """Load chat history from disk so Jarvis remembers previous sessions."""
+        if not os.path.isfile(_HISTORY_FILE):
+            return
+        try:
+            with open(_HISTORY_FILE, "r", encoding="utf-8") as f:
+                saved = json.load(f)
+            if isinstance(saved, list):
+                self.history = saved[-self.max_history * 2:]
+        except Exception:
+            pass
+
+    def _save_history(self) -> None:
+        """Persist chat history to disk."""
+        try:
+            with open(_HISTORY_FILE, "w", encoding="utf-8") as f:
+                json.dump(self.history, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
 
     def _context(self) -> dict:
         now = datetime.now()
@@ -188,6 +212,7 @@ class JarvisBrain:
             self.history.append({"role": "tool", "content": res})
         if len(self.history) > self.max_history * 2:
             self.history = self.history[-self.max_history * 2:]
+        self._save_history()
 
     @staticmethod
     def split_sentences(text: str) -> list:
