@@ -3,6 +3,7 @@ import os
 import random
 import re
 import subprocess
+import win32clipboard
 import threading
 import time
 import webbrowser
@@ -587,6 +588,41 @@ def cancel_reminders(args: dict) -> str:
     return reminder.get_manager().cancel_all()
 
 
+def copy_to_clipboard(args: dict) -> str:
+    text = args.get("text", "").strip()
+    if not text:
+        return "What should I copy to the clipboard, sir?"
+    win32clipboard.OpenClipboard()
+    try:
+        win32clipboard.EmptyClipboard()
+        win32clipboard.SetClipboardText(text, win32clipboard.CF_UNICODETEXT)
+    finally:
+        win32clipboard.CloseClipboard()
+    return f"Copied to clipboard: {text[:80]}{'...' if len(text) > 80 else ''}"
+
+
+def read_clipboard(args: dict) -> str:
+    win32clipboard.OpenClipboard()
+    try:
+        text = win32clipboard.GetClipboardData(win32clipboard.CF_UNICODETEXT)
+    except Exception:
+        text = ""
+    finally:
+        win32clipboard.CloseClipboard()
+    if not text.strip():
+        return "The clipboard is empty, sir."
+    return f"Clipboard contains: {text[:200]}{'...' if len(text) > 200 else ''}"
+
+
+def clear_clipboard(args: dict) -> str:
+    win32clipboard.OpenClipboard()
+    try:
+        win32clipboard.EmptyClipboard()
+    finally:
+        win32clipboard.CloseClipboard()
+    return "Clipboard cleared, sir."
+
+
 HANDLERS = {
     "play_music": play_music,
     "pause_music": pause_music,
@@ -613,6 +649,9 @@ HANDLERS = {
     "set_reminder": set_reminder,
     "list_reminders": list_reminders,
     "cancel_reminders": cancel_reminders,
+    "copy_to_clipboard": copy_to_clipboard,
+    "read_clipboard": read_clipboard,
+    "clear_clipboard": clear_clipboard,
 }
 
 

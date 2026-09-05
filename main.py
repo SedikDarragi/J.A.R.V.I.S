@@ -304,6 +304,19 @@ class JarvisApp:
             else:
                 args["minutes"] = num
             return {"name": "set_reminder", "args": args}
+        # Clipboard: "copy X to clipboard" / "copy X" / "clip X to clipboard"
+        m = re.search(r"(?:copy|clip|save)\s+(.+?)\s+to\s+(?:the\s+|my\s+)?clipboard", low)
+        if m:
+            return {"name": "copy_to_clipboard", "args": {"text": m.group(1).strip()}}
+        m = re.search(r"(?:copy|clip)\s+(.+?)(?:\s+to(?:\s+(?:the|my))?\s+clipboard)?$", low)
+        if m and m.group(1).strip():
+            return {"name": "copy_to_clipboard", "args": {"text": m.group(1).strip()}}
+        # Clipboard: "read clipboard" / "what's on my clipboard" / "paste clipboard"
+        if re.search(r"(?:read|what(?:'s| is|'s)?\s+(?:on|in)|get|show|paste)\s*(?:the\s+|my\s+)?clipboard", low):
+            return {"name": "read_clipboard", "args": {}}
+        # Clipboard: "clear clipboard" / "empty clipboard"
+        if re.search(r"(?:clear|empty|wipe|delete)\s*(?:the\s+|my\s+)?clipboard", low):
+            return {"name": "clear_clipboard", "args": {}}
         return None
 
     def process(self, text: str) -> None:
