@@ -208,11 +208,20 @@ class JarvisApp:
             self.ctrl_held = True
         elif key == keyboard.Key.esc:
             print("\n  [system] Shutting down. Goodbye, sir.")
+            self._cleanup()
             self.quit_event.set()
 
     def on_release(self, key) -> None:
         if key == keyboard.Key.ctrl_l:
             self.ctrl_held = False
+
+    def _cleanup(self) -> None:
+        """Clear reminders on exit so they don't carry over."""
+        try:
+            import reminder
+            reminder.get_manager().cancel_all()
+        except Exception:
+            pass
 
     def speak(self, text: str, sync: bool = False) -> None:
         if text:
@@ -234,6 +243,68 @@ class JarvisApp:
                 reply = event["reply"]
                 action = event["action"]
         return reply, action
+
+    @staticmethod
+    def _regex_fallback(text: str):
+        """Catch common actions the small model might miss."""
+        low = text.lower().strip()
+        time_pat = r"(\d+)\s*(sec(?:ond)?s?|min(?:ute)?s?|hr|hour)s?"
+        msg_pat = r"(?:to\s+)?(.+)"
+        # Pattern 1: "remind me / set a reminder in X time to do Y"
+        for prefix in [
+            r"remind me in",
+            r"(?:set|create|make) (?:our |my |a )?(?:reminder|reminders?|alarm|timer)s? in",
+            r"(?:set|create|make) (?:our |my |a )?(?:reminder|reminders?|alarm|timer)s? for",
+            r"(?:can you |could you |please )?remind me in",
+        ]:
+            m = re.search(prefix + r" " + time_pat + r"\s*" + msg_pat, low)
+            if m:
+                num = int(m.group(1))
+                unit = m.group(2)
+                msg = m.group(3).strip() or "reminder"
+                args = {"message": msg}
+                if unit.startswith("s"):
+                    args["seconds"] = num
+                elif unit.startswith("h"):
+                    args["hours"] = num
+                else:
+                    args["minutes"] = num
+                return {"name": "set_reminder", "args": args}
+        # Pattern 2: "set our reminders to do Y in X time"
+        m = re.search(
+            r"(?:set|create|make) (?:our |my |a )?(?:reminder|reminders?|alarm|timer)s?\s+(?:to\s+)?(.+?)\s+in\s+" + time_pat,
+            low,
+        )
+        if m:
+            msg = m.group(1).strip() or "reminder"
+            num = int(m.group(2))
+            unit = m.group(3)
+            args = {"message": msg}
+            if unit.startswith("s"):
+                args["seconds"] = num
+            elif unit.startswith("h"):
+                args["hours"] = num
+            else:
+                args["minutes"] = num
+            return {"name": "set_reminder", "args": args}
+        # Pattern 3: "don't let me forget to do Y in X time"
+        m = re.search(
+            r"(?:don'?t|do not) let me forget (?:to\s+)?(.+?)\s+in\s+" + time_pat,
+            low,
+        )
+        if m:
+            msg = m.group(1).strip() or "reminder"
+            num = int(m.group(2))
+            unit = m.group(3)
+            args = {"message": msg}
+            if unit.startswith("s"):
+                args["seconds"] = num
+            elif unit.startswith("h"):
+                args["hours"] = num
+            else:
+                args["minutes"] = num
+            return {"name": "set_reminder", "args": args}
+        return None
 
     def process(self, text: str) -> None:
         text = text.strip()
@@ -288,7 +359,12 @@ class JarvisApp:
                     if attempt < 2:
                         time.sleep(0.4)
                 print(f"  [timing] brain={time.time() - t0:.1f}s")
+                print(f"  [brain] reply={reply[:100]}")
                 print(f"  [brain] action={action}")
+                if action is None:
+                    action = self._regex_fallback(text)
+                    if action:
+                        print(f"  [regex] action={action}")
             except Exception as e:
                 self._flush_reply()
                 self.speech.say_sync("I'm afraid my systems are struggling right now, sir.")
@@ -340,6 +416,7 @@ class JarvisApp:
     def handle_command(self, line: str) -> bool:
         cmd = line.strip().lower()
         if cmd in ("/quit", "/exit", "quit", "exit", "goodbye"):
+            self._cleanup()
             self.quit_event.set()
             return False
         if cmd == "/help":

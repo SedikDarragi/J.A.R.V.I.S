@@ -16,6 +16,9 @@ config.json
 # Chat history (session-specific)
 chat_history.json
 
+# Reminders (session-specific)
+reminders.json
+
 # OS
 Thumbs.db
 Desktop.ini

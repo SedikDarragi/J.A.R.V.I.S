@@ -15,6 +15,7 @@ import media
 import project
 import apps
 import steam
+import reminder
 
 CITY = ""
 LIKED_PLAYLIST_ID = ""
@@ -563,6 +564,29 @@ def install_game(args: dict) -> str:
     return mgr.install(game["appid"])
 
 
+def set_reminder(args: dict) -> str:
+    message = args.get("message", "").strip()
+    if not message:
+        return "What should I remind you about, sir?"
+    # Accept seconds, minutes, or hours — convert all to seconds
+    seconds = int(args.get("seconds", 0))
+    minutes = int(args.get("minutes", 0))
+    hours = int(args.get("hours", 0))
+    total_seconds = seconds + (minutes * 60) + (hours * 3600)
+    if total_seconds <= 0:
+        return "Please tell me when to remind you, sir."
+    mgr = reminder.get_manager()
+    return mgr.add(total_seconds, message)
+
+
+def list_reminders(args: dict) -> str:
+    return reminder.get_manager().list_reminders()
+
+
+def cancel_reminders(args: dict) -> str:
+    return reminder.get_manager().cancel_all()
+
+
 HANDLERS = {
     "play_music": play_music,
     "pause_music": pause_music,
@@ -586,6 +610,9 @@ HANDLERS = {
     "new_project": new_project,
     "launch_game": launch_game,
     "install_game": install_game,
+    "set_reminder": set_reminder,
+    "list_reminders": list_reminders,
+    "cancel_reminders": cancel_reminders,
 }
 
 
