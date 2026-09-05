@@ -1,7 +1,9 @@
 import ctypes
+import glob
 import os
 import random
 import re
+import shutil
 import subprocess
 import win32clipboard
 import threading
@@ -623,6 +625,174 @@ def clear_clipboard(args: dict) -> str:
     return "Clipboard cleared, sir."
 
 
+_BLOCKED_DIRS = {
+    os.path.normpath(p) for p in [
+        "C:\\Windows", "C:\\Program Files", "C:\\Program Files (x86)",
+        "C:\\ProgramData", "C:\\Recovery", "C:\\$Recycle.Bin",
+        "C:\\System Volume Information",
+    ]
+}
+
+_cwd = os.path.expanduser("~")
+
+
+def _safe_path(path: str) -> str | None:
+    """Resolve path relative to _cwd and block dangerous directories."""
+    expanded = os.path.expanduser(path)
+    if os.path.isabs(expanded):
+        full = os.path.normpath(expanded)
+    else:
+        full = os.path.normpath(os.path.join(_cwd, expanded))
+    for blocked in _BLOCKED_DIRS:
+        if full.startswith(blocked):
+            return None
+    return full
+
+
+def change_directory(args: dict) -> str:
+    global _cwd
+    path = args.get("path", "").strip()
+    if not path:
+        return "Where should I go, sir?"
+    if path in ("~", "home"):
+        path = "~"
+    expanded = os.path.expanduser(path)
+    if os.path.isabs(expanded):
+        target = os.path.normpath(expanded)
+    else:
+        target = os.path.normpath(os.path.join(_cwd, expanded))
+    if not os.path.isdir(target):
+        return f"Directory not found: {path}"
+    for blocked in _BLOCKED_DIRS:
+        if target.startswith(blocked):
+            return "I can't go there, sir."
+    _cwd = target
+    return f"Now in {_cwd}"
+
+
+def get_current_directory(args: dict) -> str:
+    return f"Currently in {_cwd}, sir."
+
+
+def read_file(args: dict) -> str:
+    path = args.get("path", "").strip()
+    if not path:
+        return "Which file should I read, sir?"
+    safe = _safe_path(path)
+    if not safe:
+        return "I can't access that directory, sir."
+    if not os.path.isfile(safe):
+        return f"File not found: {path}"
+    try:
+        with open(safe, "r", encoding="utf-8", errors="replace") as f:
+            content = f.read(4000)
+        if len(content) == 4000:
+            content += "\n... (truncated)"
+        return f"Contents of {os.path.basename(safe)}:\n{content}"
+    except Exception:
+        return f"Could not read {path}, sir."
+
+
+def write_file(args: dict) -> str:
+    path = args.get("path", "").strip()
+    content = args.get("content", "")
+    if not path:
+        return "Where should I write the file, sir?"
+    safe = _safe_path(path)
+    if not safe:
+        return "I can't write to that directory, sir."
+    try:
+        os.makedirs(os.path.dirname(safe), exist_ok=True)
+        with open(safe, "w", encoding="utf-8") as f:
+            f.write(content)
+        return f"Written to {os.path.basename(safe)}, sir."
+    except Exception:
+        return f"Could not write to {path}, sir."
+
+
+def delete_file(args: dict) -> str:
+    path = args.get("path", "").strip()
+    if not path:
+        return "Which file should I delete, sir?"
+    safe = _safe_path(path)
+    if not safe:
+        return "I can't delete files from that directory, sir."
+    if not os.path.exists(safe):
+        return f"File not found: {path}"
+    try:
+        if os.path.isdir(safe):
+            shutil.rmtree(safe)
+            return f"Deleted folder {os.path.basename(safe)}, sir."
+        os.remove(safe)
+        return f"Deleted {os.path.basename(safe)}, sir."
+    except Exception:
+        return f"Could not delete {path}, sir."
+
+
+def list_files(args: dict) -> str:
+    path = args.get("path", "").strip() or "."
+    safe = _safe_path(path)
+    if not safe:
+        return "I can't access that directory, sir."
+    if not os.path.isdir(safe):
+        return f"Not a directory: {path}"
+    try:
+        entries = os.listdir(safe)
+        if not entries:
+            return "That folder is empty, sir."
+        folders = [e + "/" for e in entries if os.path.isdir(os.path.join(safe, e))]
+        files = [e for e in entries if os.path.isfile(os.path.join(safe, e))]
+        parts = folders[:15] + files[:15]
+        total = len(folders) + len(files)
+        result = "\n".join(parts)
+        if total > 30:
+            result += f"\n... and {total - 30} more"
+        return f"Contents of {os.path.basename(safe) or path}:\n{result}"
+    except Exception:
+        return f"Could not list {path}, sir."
+
+
+def copy_file(args: dict) -> str:
+    src = args.get("source", "").strip()
+    dst = args.get("destination", "").strip()
+    if not src or not dst:
+        return "I need a source and destination, sir."
+    safe_src = _safe_path(src)
+    safe_dst = _safe_path(dst)
+    if not safe_src or not safe_dst:
+        return "I can't access that path, sir."
+    if not os.path.exists(safe_src):
+        return f"Source not found: {src}"
+    try:
+        if os.path.isdir(safe_src):
+            shutil.copytree(safe_src, safe_dst)
+        else:
+            os.makedirs(os.path.dirname(safe_dst), exist_ok=True)
+            shutil.copy2(safe_src, safe_dst)
+        return f"Copied to {os.path.basename(safe_dst)}, sir."
+    except Exception:
+        return f"Could not copy {src}, sir."
+
+
+def move_file(args: dict) -> str:
+    src = args.get("source", "").strip()
+    dst = args.get("destination", "").strip()
+    if not src or not dst:
+        return "I need a source and destination, sir."
+    safe_src = _safe_path(src)
+    safe_dst = _safe_path(dst)
+    if not safe_src or not safe_dst:
+        return "I can't access that path, sir."
+    if not os.path.exists(safe_src):
+        return f"Source not found: {src}"
+    try:
+        os.makedirs(os.path.dirname(safe_dst), exist_ok=True)
+        shutil.move(safe_src, safe_dst)
+        return f"Moved to {os.path.basename(safe_dst)}, sir."
+    except Exception:
+        return f"Could not move {src}, sir."
+
+
 HANDLERS = {
     "play_music": play_music,
     "pause_music": pause_music,
@@ -652,6 +822,14 @@ HANDLERS = {
     "copy_to_clipboard": copy_to_clipboard,
     "read_clipboard": read_clipboard,
     "clear_clipboard": clear_clipboard,
+    "read_file": read_file,
+    "write_file": write_file,
+    "delete_file": delete_file,
+    "list_files": list_files,
+    "copy_file": copy_file,
+    "move_file": move_file,
+    "change_directory": change_directory,
+    "get_current_directory": get_current_directory,
 }
 
 

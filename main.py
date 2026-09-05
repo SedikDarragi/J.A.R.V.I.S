@@ -248,6 +248,7 @@ class JarvisApp:
     def _regex_fallback(text: str):
         """Catch common actions the small model might miss."""
         low = text.lower().strip()
+        low = re.sub(r"[^\w\s/\\.\-]", "", low)  # strip punctuation except paths
         time_pat = r"(\d+)\s*(sec(?:ond)?s?|min(?:ute)?s?|hr|hour)s?"
         msg_pat = r"(?:to\s+)?(.+)"
         # Pattern 1: "remind me / set a reminder in X time to do Y"
@@ -304,12 +305,9 @@ class JarvisApp:
             else:
                 args["minutes"] = num
             return {"name": "set_reminder", "args": args}
-        # Clipboard: "copy X to clipboard" / "copy X" / "clip X to clipboard"
+        # Clipboard: "copy X to clipboard" / "clip X to clipboard"
         m = re.search(r"(?:copy|clip|save)\s+(.+?)\s+to\s+(?:the\s+|my\s+)?clipboard", low)
         if m:
-            return {"name": "copy_to_clipboard", "args": {"text": m.group(1).strip()}}
-        m = re.search(r"(?:copy|clip)\s+(.+?)(?:\s+to(?:\s+(?:the|my))?\s+clipboard)?$", low)
-        if m and m.group(1).strip():
             return {"name": "copy_to_clipboard", "args": {"text": m.group(1).strip()}}
         # Clipboard: "read clipboard" / "what's on my clipboard" / "paste clipboard"
         if re.search(r"(?:read|what(?:'s| is|'s)?\s+(?:on|in)|get|show|paste)\s*(?:the\s+|my\s+)?clipboard", low):
@@ -317,6 +315,46 @@ class JarvisApp:
         # Clipboard: "clear clipboard" / "empty clipboard"
         if re.search(r"(?:clear|empty|wipe|delete)\s*(?:the\s+|my\s+)?clipboard", low):
             return {"name": "clear_clipboard", "args": {}}
+        # Files: "list files in X" / "what's in X folder" / "list files"
+        m = re.search(r"(?:list|show|ls)\s+(?:files?\s+)?(?:in\s+|of\s+)?(.+?)(?:\s+folder)?$", low)
+        if m and ("file" in low or "folder" in low or "directory" in low):
+            path = m.group(1).strip()
+            if path in ("files", "files.", "the files", "the files."):
+                path = "."
+            return {"name": "list_files", "args": {"path": path}}
+        if re.search(r"(?:list|show|ls)\s+files?\s*\.?\s*$", low):
+            return {"name": "list_files", "args": {"path": "."}}
+        # Files: "what's in X folder" / "what's in X"
+        m = re.search(r"what(?:'s| is|s)\s+(?:in|inside)\s+(?:the\s+|my\s+)?(.+?)(?:\s+folder)?$", low)
+        if m:
+            return {"name": "list_files", "args": {"path": m.group(1).strip()}}
+        # Files: "read/open X" (when X looks like a file path)
+        m = re.search(r"(?:read|open|cat)\s+(?:the\s+)?(?:file\s+)?(.+\.\w+)$", low)
+        if m:
+            return {"name": "read_file", "args": {"path": m.group(1).strip()}}
+        # Files: "write/create X to Y" / "save X to Y"
+        m = re.search(r"(?:write|create|save)\s+(?:file\s+)?(.+?)\s+(?:to|in|into)\s+(?:the\s+)?(?:file\s+)?(.+)$", low)
+        if m:
+            return {"name": "write_file", "args": {"path": m.group(2).strip(), "content": m.group(1).strip()}}
+        # Files: "delete/remove X"
+        m = re.search(r"(?:delete|remove|trash|rm)\s+(?:the\s+)?(?:file\s+)?(.+)$", low)
+        if m:
+            return {"name": "delete_file", "args": {"path": m.group(1).strip()}}
+        # Files: "copy X to Y"
+        m = re.search(r"(?:copy|cp)\s+(.+?)\s+to\s+(.+)$", low)
+        if m and any(kw in low for kw in ["file", ".", "/"]):
+            return {"name": "copy_file", "args": {"source": m.group(1).strip(), "destination": m.group(2).strip()}}
+        # Files: "move/rename X to Y"
+        m = re.search(r"(?:move|mv|rename)\s+(.+?)\s+to\s+(.+)$", low)
+        if m:
+            return {"name": "move_file", "args": {"source": m.group(1).strip(), "destination": m.group(2).strip()}}
+        # Directory: "go to X" / "cd X" / "navigate to X"
+        m = re.search(r"(?:go to|cd|navigate to|switch to|enter)\s+(?:the\s+)?(?:to\s+)?(?:directory\s+|folder\s+)?(.+?)(?:\s+folder)?$", low)
+        if m:
+            return {"name": "change_directory", "args": {"path": m.group(1).strip()}}
+        # Directory: "where am I" / "current directory" / "what directory"
+        if re.search(r"(?:where am i|current\s+(?:dir|directory|folder|path)|what\s+(?:dir|directory|folder|path))", low):
+            return {"name": "get_current_directory", "args": {}}
         return None
 
     def process(self, text: str) -> None:
