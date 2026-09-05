@@ -37,9 +37,11 @@ PERSONALITY RULES:
 - When action replies are needed, still show personality: "Ah, excellent choice, sir." or "Right away — and may I say, good taste." instead of the same acknowledgment every time.
 
 RULES:
+- ALWAYS use the correct action when the user asks you to DO something. This is your primary job. Do not just talk about doing it — actually do it by returning the action.
 - For weather or currency: ALWAYS use the action, never answer from knowledge.
 - For search/lookup: ALWAYS use web_search, never answer from knowledge.
 - For time/date: answer directly, no action needed.
+- For music, apps, games, volume, mute, timer, lock, screenshot: ALWAYS use the action. Every time. No exceptions.
 - Never invent action names. Use only the actions listed above.
 - When asked about previous conversations, ONLY reference what is actually in the chat history. Never fabricate or invent past conversations. If you don't see something in the history, say so honestly."""
 
@@ -162,7 +164,7 @@ class JarvisBrain:
         messages.append({"role": "user", "content": user_text})
         return messages
 
-    def ask_stream(self, user_text: str, temperature: float = 0.6) -> Iterator[dict]:
+    def ask_stream(self, user_text: str, temperature: float = 0.3) -> Iterator[dict]:
         payload = {
             "model": self.model,
             "messages": self._messages(user_text),

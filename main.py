@@ -281,7 +281,7 @@ class JarvisApp:
                     prompt_text = text
                     if attempt > 0:
                         prompt_text = text + "\n\n(Answer now. If you were about to reply with nothing, give a brief normal reply instead.)"
-                    reply, action = self._ask(prompt_text, temperature=0.6 + 0.2 * attempt)
+                    reply, action = self._ask(prompt_text, temperature=0.3 + 0.1 * attempt)
                     if reply.strip():
                         break
                     self._flush_reply()
